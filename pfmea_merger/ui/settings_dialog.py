@@ -40,7 +40,22 @@ class SettingsDialog(QtWidgets.QDialog):
 
     # ------------------------------------------------------------------
     def _build_ui(self):
-        form = QtWidgets.QFormLayout()
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(16, 14, 16, 14)
+        outer.setSpacing(12)
+
+        title = QtWidgets.QLabel(self.tr_.t("settings_title"))
+        f = title.font(); f.setPointSize(13); f.setBold(True); title.setFont(f)
+        outer.addWidget(title)
+
+        card = QtWidgets.QFrame()
+        card.setObjectName("Card")
+        outer.addWidget(card, 1)
+        form = QtWidgets.QFormLayout(card)
+        form.setContentsMargins(14, 12, 14, 12)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
+        form.setLabelAlignment(QtCore.Qt.AlignmentFlag.AlignRight)
 
         self.header_rows_spin = QtWidgets.QSpinBox()
         self.header_rows_spin.setRange(1, 50)
@@ -50,17 +65,17 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.opc_col_edit = QtWidgets.QLineEdit()
         self.opc_col_edit.setMaxLength(3)
-        self.opc_col_edit.setFixedWidth(60)
+        self.opc_col_edit.setFixedWidth(80)
 
         self.name_col_edit = QtWidgets.QLineEdit()
         self.name_col_edit.setMaxLength(3)
-        self.name_col_edit.setFixedWidth(60)
+        self.name_col_edit.setFixedWidth(80)
 
         self.sheet_edit = QtWidgets.QLineEdit()
         self.history_edit = QtWidgets.QLineEdit()
 
         self.footer_edit = QtWidgets.QPlainTextEdit()
-        self.footer_edit.setFixedHeight(80)
+        self.footer_edit.setFixedHeight(100)
 
         self.lang_combo = QtWidgets.QComboBox()
         self.lang_combo.addItem("فارسی", "fa")
@@ -79,13 +94,14 @@ class SettingsDialog(QtWidgets.QDialog):
             QtWidgets.QDialogButtonBox.StandardButton.Ok
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
+        ok_btn = btns.button(QtWidgets.QDialogButtonBox.StandardButton.Ok)
+        if ok_btn is not None:
+            ok_btn.setProperty("primary", True)
         btns.accepted.connect(self.accept)
         btns.rejected.connect(self.reject)
+        outer.addWidget(btns)
 
-        v = QtWidgets.QVBoxLayout(self)
-        v.addLayout(form)
-        v.addWidget(btns)
-        self.resize(430, 460)
+        self.resize(470, 520)
 
     # ------------------------------------------------------------------
     def _load_values(self):
