@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Output / user files
+pfmea_merger/output/*.xlsx
+pfmea_merger/samples/*.xlsx
+pfmea_merger/settings.json
+pfmea_merger/profiles/*.json
+
+# Excel temp
+~$*.xlsx
+~$*.xlsm
+
+# IDE
+.vscode/
+.idea/
+*.swp
