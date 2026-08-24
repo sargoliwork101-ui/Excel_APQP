@@ -23,7 +23,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .config import MergeSettings
-from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook
+from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last_non_empty_row
 
 
 # ---------------------------------------------------------------------------
@@ -163,18 +163,8 @@ def _copy_whole_sheet(src_ws: Worksheet, dst_ws: Worksheet) -> None:
     _copy_row_range(src_ws, dst_ws, 1, last_row, 1, max_col)
 
 
-def _last_non_empty_row(ws: Worksheet) -> int:
-    """Return the row number of the last cell that actually holds a value."""
-    last = 0
-    max_col = ws.max_column
-    for r in range(ws.max_row, 0, -1):
-        for c in range(1, max_col + 1):
-            if ws.cell(row=r, column=c).value is not None:
-                last = r
-                break
-        if last:
-            break
-    return last or ws.max_row
+# kept for backwards compat within this module
+_last_non_empty_row = last_non_empty_row
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +257,16 @@ def merge_pfmea(
 
     report(97, "Saving output...")
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    out_wb.save(output_path)
+    try:
+        out_wb.save(output_path)
+    except PermissionError as e:
+        template_wb.close()
+        out_wb.close()
+        raise PermissionError(
+            f"Could not write to '{output_path}'. "
+            f"Is the file open in Excel? Please close it and try again.\n"
+            f"({e})"
+        ) from e
     template_wb.close()
     out_wb.close()
     report(100, "Done.")

@@ -3,10 +3,11 @@ Main window for the PFMEA Merger app (dark themed).
 """
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Tuple
 import os
+import sys
 import traceback
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
@@ -57,12 +58,16 @@ def _make_card() -> QtWidgets.QFrame:
     return f
 
 
-def _icon_btn(text: str, tooltip: str = "") -> QtWidgets.QPushButton:
-    b = QtWidgets.QPushButton(text)
-    b.setProperty("icon-btn", True)
-    if tooltip:
-        b.setToolTip(tooltip)
-    return b
+# =============================================================================
+# Row model: keeps checkbox state in Python so profile save/load is trivial
+# =============================================================================
+class Row:
+    __slots__ = ("path", "block", "enabled")
+
+    def __init__(self, path: str, block: StationBlock, enabled: bool = True):
+        self.path = path
+        self.block = block
+        self.enabled = enabled
 
 
 # =============================================================================
@@ -73,16 +78,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.setAcceptDrops(True)
         self.app_settings = AppSettings.load()
         self.merge_settings = MergeSettings()
         self.tr_ = Translator(self.app_settings.language)
 
-        # (file_path -> WorkbookAnalysis)
+        # file_path -> WorkbookAnalysis (for product info, etc.)
         self.workbooks: Dict[str, WorkbookAnalysis] = {}
-        # rows are (file_path, StationBlock)
-        self.rows: List[Tuple[str, StationBlock]] = []
+        # Ordered list of station rows shown in the table (source of truth)
+        self.rows: List[Row] = []
+        # Suppresses recursion when we programmatically flip checkboxes
+        self._suspend_checks = False
 
-        self._worker: MergeWorker | None = None
+        self._worker: Optional[MergeWorker] = None
+        self._last_output: str = ""
 
         self._build_ui()
         self._apply_language()
@@ -92,8 +101,8 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------ UI
     def _build_ui(self):
         self.setWindowTitle("PFMEA Merger")
-        self.resize(1180, 760)
-        self.setMinimumSize(960, 620)
+        self.resize(1180, 780)
+        self.setMinimumSize(1000, 640)
 
         cw = QtWidgets.QWidget()
         self.setCentralWidget(cw)
@@ -103,20 +112,29 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ---- Title bar
         title_bar = QtWidgets.QHBoxLayout()
+        title_col = QtWidgets.QVBoxLayout()
+        title_col.setSpacing(2)
         self.title_label = QtWidgets.QLabel()
         f = self.title_label.font(); f.setPointSize(15); f.setBold(True)
         self.title_label.setFont(f)
         self.subtitle_label = QtWidgets.QLabel()
         self.subtitle_label.setProperty("muted", True)
-        title_col = QtWidgets.QVBoxLayout()
-        title_col.setSpacing(2)
         title_col.addWidget(self.title_label)
         title_col.addWidget(self.subtitle_label)
         title_bar.addLayout(title_col, 1)
-        self.settings_btn = _icon_btn("⚙", "Settings")
+
+        self.lang_btn = QtWidgets.QPushButton()
+        self.lang_btn.setFixedHeight(36)
+        self.lang_btn.setToolTip("Toggle Language / تغییر زبان")
+        self.lang_btn.clicked.connect(self._toggle_language)
+
+        self.settings_btn = QtWidgets.QPushButton("⚙")
         self.settings_btn.setFixedSize(38, 38)
         f = self.settings_btn.font(); f.setPointSize(14); self.settings_btn.setFont(f)
+        self.settings_btn.setToolTip("Settings")
         self.settings_btn.clicked.connect(self._open_settings)
+
+        title_bar.addWidget(self.lang_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         title_bar.addWidget(self.settings_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         root.addLayout(title_bar)
 
@@ -136,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.profile_label = QtWidgets.QLabel()
         self.profile_combo = QtWidgets.QComboBox()
         self.profile_combo.setMinimumWidth(180)
+        self.profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         self.profile_load_btn = QtWidgets.QPushButton()
         self.profile_save_btn = QtWidgets.QPushButton()
         self.profile_delete_btn = QtWidgets.QPushButton()
@@ -156,26 +175,29 @@ class MainWindow(QtWidgets.QMainWindow):
         c1.setColumnStretch(2, 1)
         root.addWidget(card1)
 
-        # ---- Card 2: file toolbar + station table
+        # ---- Card 2: files toolbar + station table
         card2 = _make_card()
         c2 = QtWidgets.QVBoxLayout(card2)
         c2.setContentsMargins(14, 12, 14, 12)
         c2.setSpacing(10)
 
         toolbar = QtWidgets.QHBoxLayout()
-        self.add_files_btn = QtWidgets.QPushButton("📄  ")
-        self.add_folder_btn = QtWidgets.QPushButton("📁  ")
-        self.refresh_btn = QtWidgets.QPushButton("🔄  ")
-        self.clear_btn = QtWidgets.QPushButton("🗑  ")
+        self.add_files_btn = QtWidgets.QPushButton()
+        self.add_folder_btn = QtWidgets.QPushButton()
+        self.refresh_btn = QtWidgets.QPushButton()
+        self.remove_btn = QtWidgets.QPushButton()
+        self.clear_btn = QtWidgets.QPushButton()
         self.clear_btn.setProperty("danger", True)
         self.add_files_btn.clicked.connect(self._add_files)
         self.add_folder_btn.clicked.connect(self._add_folder)
         self.refresh_btn.clicked.connect(self._refresh_all)
+        self.remove_btn.clicked.connect(self._remove_selected)
         self.clear_btn.clicked.connect(self._clear_all)
         toolbar.addWidget(self.add_files_btn)
         toolbar.addWidget(self.add_folder_btn)
         toolbar.addWidget(self.refresh_btn)
         toolbar.addStretch(1)
+        toolbar.addWidget(self.remove_btn)
         toolbar.addWidget(self.clear_btn)
         c2.addLayout(toolbar)
 
@@ -189,6 +211,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setShowGrid(True)
         self.table.setSelectionBehavior(
             QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(
+            QtWidgets.QTableWidget.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(
             QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -199,28 +223,53 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(self.COL_NAME,  280)
         self.table.setColumnWidth(self.COL_ROWS,  75)
         self.table.verticalHeader().setDefaultSectionSize(30)
+        self.table.itemChanged.connect(self._on_table_item_changed)
+        # Double-click a row toggles its check
+        self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        # Right-click context menu
+        self.table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_context_menu)
+        # Delete key removes selected
+        del_action = QtGui.QAction(self)
+        del_action.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Delete))
+        del_action.triggered.connect(self._remove_selected)
+        self.table.addAction(del_action)
+        # Space toggles check
+        space_action = QtGui.QAction(self)
+        space_action.setShortcut(QtGui.QKeySequence(QtCore.Qt.Key.Key_Space))
+        space_action.triggered.connect(self._toggle_selected)
+        self.table.addAction(space_action)
         c2.addWidget(self.table, 1)
 
         row3 = QtWidgets.QHBoxLayout()
-        self.select_all_btn = QtWidgets.QPushButton("☑ ")
-        self.deselect_all_btn = QtWidgets.QPushButton("☐ ")
+        self.select_all_btn = QtWidgets.QPushButton()
+        self.deselect_all_btn = QtWidgets.QPushButton()
+        self.invert_btn = QtWidgets.QPushButton()
         self.up_btn = QtWidgets.QPushButton("⬆")
         self.down_btn = QtWidgets.QPushButton("⬇")
-        self.up_btn.setFixedWidth(44)
-        self.down_btn.setFixedWidth(44)
+        self.top_btn = QtWidgets.QPushButton("⏫")
+        self.bottom_btn = QtWidgets.QPushButton("⏬")
+        for b in (self.up_btn, self.down_btn, self.top_btn, self.bottom_btn):
+            b.setFixedWidth(44)
         self.select_all_btn.clicked.connect(lambda: self._set_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._set_all(False))
+        self.invert_btn.clicked.connect(self._invert_selection)
         self.up_btn.clicked.connect(lambda: self._move_row(-1))
         self.down_btn.clicked.connect(lambda: self._move_row(+1))
+        self.top_btn.clicked.connect(self._move_top)
+        self.bottom_btn.clicked.connect(self._move_bottom)
         row3.addWidget(self.select_all_btn)
         row3.addWidget(self.deselect_all_btn)
+        row3.addWidget(self.invert_btn)
         row3.addStretch(1)
         self.count_label = QtWidgets.QLabel()
         self.count_label.setProperty("muted", True)
         row3.addWidget(self.count_label)
         row3.addSpacing(20)
+        row3.addWidget(self.top_btn)
         row3.addWidget(self.up_btn)
         row3.addWidget(self.down_btn)
+        row3.addWidget(self.bottom_btn)
         c2.addLayout(row3)
         root.addWidget(card2, 1)
 
@@ -237,12 +286,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_browse_btn.clicked.connect(self._pick_output)
         self.history_chk = QtWidgets.QCheckBox()
         self.history_chk.setChecked(True)
+        self.open_after_chk = QtWidgets.QCheckBox()
+        self.open_after_chk.setChecked(True)
 
         self.merge_btn = QtWidgets.QPushButton()
         self.merge_btn.setMinimumHeight(42)
         self.merge_btn.setProperty("primary", True)
         f = self.merge_btn.font(); f.setPointSize(11); f.setBold(True); self.merge_btn.setFont(f)
         self.merge_btn.clicked.connect(self._do_merge)
+
+        self.open_output_btn = QtWidgets.QPushButton()
+        self.open_output_btn.setEnabled(False)
+        self.open_output_btn.clicked.connect(self._open_last_output)
 
         self.progress = QtWidgets.QProgressBar()
         self.progress.setValue(0)
@@ -251,9 +306,15 @@ class MainWindow(QtWidgets.QMainWindow):
         c3.addWidget(self.output_label,        0, 0)
         c3.addWidget(self.output_edit,         0, 1, 1, 3)
         c3.addWidget(self.output_browse_btn,   0, 4)
-        c3.addWidget(self.history_chk,         1, 0, 1, 3)
+        opts_row = QtWidgets.QHBoxLayout()
+        opts_row.addWidget(self.history_chk)
+        opts_row.addSpacing(20)
+        opts_row.addWidget(self.open_after_chk)
+        opts_row.addStretch(1)
+        c3.addLayout(opts_row,                 1, 0, 1, 5)
         c3.addWidget(self.merge_btn,           2, 0, 1, 2)
-        c3.addWidget(self.progress,            2, 2, 1, 3)
+        c3.addWidget(self.progress,            2, 2, 1, 2)
+        c3.addWidget(self.open_output_btn,     2, 4)
         c3.setColumnStretch(1, 1)
         c3.setColumnStretch(2, 1)
         root.addWidget(card3)
@@ -270,10 +331,11 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.title_label.setText(t("app_title"))
         self.subtitle_label.setText(
-            "قالب PFMEA + چند فایل ایستگاه → یک خروجی تجمیعی"
+            "قالب PFMEA + فایل‌های ایستگاه ← یک خروجی تجمیعی"
             if self.tr_.is_rtl()
             else "PFMEA template + station files → one merged output"
         )
+        self.lang_btn.setText("🌐 " + ("EN" if self.tr_.is_rtl() else "فا"))
         self.template_label.setText(t("template_label"))
         self.template_browse_btn.setText("📂 " + t("browse"))
         self.profile_label.setText(t("profile_label"))
@@ -283,20 +345,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self.add_files_btn.setText("📄 " + t("add_files"))
         self.add_folder_btn.setText("📁 " + t("add_folder"))
         self.refresh_btn.setText("🔄 " + t("refresh"))
+        self.remove_btn.setText("➖ " + t("remove_selected"))
         self.clear_btn.setText("🗑 " + t("clear"))
         self.hint_label.setText(t("stations_hint"))
         self.select_all_btn.setText("☑ " + t("select_all"))
         self.deselect_all_btn.setText("☐ " + t("deselect_all"))
+        self.invert_btn.setText("↔ " + t("invert"))
         self.output_label.setText(t("output_label"))
         self.output_browse_btn.setText("📂 " + t("browse"))
         self.history_chk.setText(t("include_history"))
+        self.open_after_chk.setText(t("open_after"))
         self.merge_btn.setText(t("merge_button"))
+        self.open_output_btn.setText("📂 " + t("open_output"))
         self.table.setHorizontalHeaderLabels([
             t("col_use"), t("col_order"), t("col_opc"),
             t("col_name"), t("col_rows"), t("col_file"),
         ])
+        self.up_btn.setToolTip(t("move_up"))
+        self.down_btn.setToolTip(t("move_down"))
+        self.top_btn.setToolTip(t("move_top"))
+        self.bottom_btn.setToolTip(t("move_bottom"))
         self._update_counts()
         self.status.showMessage("● " + t("ready"))
+
+    def _toggle_language(self):
+        self.app_settings.language = "en" if self.tr_.is_rtl() else "fa"
+        self.tr_.set_lang(self.app_settings.language)
+        self.app_settings.save()
+        self._apply_language()
 
     # ------------------------------------------------------- persistence
     def _restore_last(self):
@@ -306,11 +382,18 @@ class MainWindow(QtWidgets.QMainWindow):
             for p in sorted(TEMPLATES_DIR.glob("*.xlsx")):
                 self.template_edit.setText(str(p))
                 break
-        self.output_edit.setText(str(OUTPUT_DIR / "Merged_PFMEA.xlsx"))
+        default_out = OUTPUT_DIR / "Merged_PFMEA.xlsx"
+        if self.app_settings.last_output_dir:
+            candidate = Path(self.app_settings.last_output_dir) / "Merged_PFMEA.xlsx"
+            self.output_edit.setText(str(candidate))
+        else:
+            self.output_edit.setText(str(default_out))
 
     def _save_last(self):
         self.app_settings.last_template = self.template_edit.text()
-        self.app_settings.last_output_dir = str(Path(self.output_edit.text()).parent)
+        p = self.output_edit.text().strip()
+        if p:
+            self.app_settings.last_output_dir = str(Path(p).parent)
         self.app_settings.save()
 
     # ---------------------------------------------------- template pick
@@ -360,9 +443,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.app_settings.save()
             paths = sorted(str(p) for p in Path(folder).glob("*.xlsx")
                            if not p.name.startswith("~$"))
+            if not paths:
+                QtWidgets.QMessageBox.information(
+                    self, self.tr_.t("info"),
+                    self.tr_.t("no_xlsx_in_folder"),
+                )
+                return
             self._add_paths(paths)
 
     def _add_paths(self, paths: List[str]):
+        """
+        Read each file, extract stations, append them to self.rows. Skip
+        paths already present. If a profile is loaded, reapply its order
+        and check state to newly-loaded rows too.
+        """
         skipped: List[str] = []
         added_count = 0
         station_count = 0
@@ -371,13 +465,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 continue
             analysis = analyze_workbook(p, self.merge_settings)
             if not analysis.is_valid:
-                skipped.append(Path(p).name)
+                skipped.append(f"{Path(p).name}: {analysis.error}")
                 continue
             self.workbooks[p] = analysis
             for block in analysis.stations:
-                self.rows.append((p, block))
+                self.rows.append(Row(p, block, enabled=True))
                 station_count += 1
             added_count += 1
+
+        # If a profile is currently selected, apply its order + checks
+        profile_name = self.profile_combo.currentText().strip()
+        if profile_name:
+            profile = pm.load_profile(profile_name)
+            if profile and profile.stations:
+                self._apply_profile_to_rows(profile)
+
         self._rebuild_table()
         if skipped:
             QtWidgets.QMessageBox.warning(
@@ -389,36 +491,86 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_all(self):
         paths = list(self.workbooks.keys())
+        # remember enabled state per (path, opc) so refresh keeps checks
+        prev_enabled = {(r.path, r.block.opc_code): r.enabled for r in self.rows}
         self.workbooks.clear()
         self.rows.clear()
-        if paths:
-            self._add_paths(paths)
-        else:
+        if not paths:
             self._rebuild_table()
+            return
+        for p in paths:
+            analysis = analyze_workbook(p, self.merge_settings)
+            if not analysis.is_valid:
+                continue
+            self.workbooks[p] = analysis
+            for block in analysis.stations:
+                self.rows.append(Row(
+                    p, block,
+                    enabled=prev_enabled.get((p, block.opc_code), True),
+                ))
+        profile_name = self.profile_combo.currentText().strip()
+        if profile_name:
+            profile = pm.load_profile(profile_name)
+            if profile and profile.stations:
+                self._apply_profile_to_rows(profile)
+        self._rebuild_table()
+        self.status.showMessage("● " + self.tr_.t("refreshed"))
 
     def _clear_all(self):
+        if self.rows:
+            ans = QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"),
+                self.tr_.t("clear_confirm"),
+            )
+            if ans != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
         self.workbooks.clear()
         self.rows.clear()
         self._rebuild_table()
         self.status.showMessage("● " + self.tr_.t("ready"))
 
-    # -------------------------------------------------------- table ui
-    def _rebuild_table(self):
-        # apply profile ordering if a profile is selected
-        profile_name = self.profile_combo.currentText().strip()
-        profile = pm.load_profile(profile_name) if profile_name else None
-        if profile and profile.station_order:
-            order_map = {code: i for i, code in enumerate(profile.station_order)}
-            def key(item):
-                return order_map.get(str(item[1].opc_code), 10_000)
-            self.rows.sort(key=key)
+    def _remove_selected(self):
+        rows_idx = sorted({idx.row() for idx in self.table.selectedIndexes()},
+                          reverse=True)
+        if not rows_idx:
+            return
+        for r in rows_idx:
+            if 0 <= r < len(self.rows):
+                del self.rows[r]
+        # If a file no longer has any rows, drop it from workbooks
+        remaining_paths = {r.path for r in self.rows}
+        for p in list(self.workbooks.keys()):
+            if p not in remaining_paths:
+                del self.workbooks[p]
+        self._rebuild_table()
 
+    # -------------------------------------------------------- table ui
+    def _apply_profile_to_rows(self, profile: pm.ProductProfile) -> None:
+        """Reorder self.rows by profile order and apply enabled states."""
+        order_map = {s.opc: i for i, s in enumerate(profile.stations)}
+        enabled_map = {s.opc: s.enabled for s in profile.stations}
+        for r in self.rows:
+            code = str(r.block.opc_code)
+            if code in enabled_map:
+                r.enabled = enabled_map[code]
+        # stable sort: known codes first (in profile order), unknown at end
+        self.rows.sort(key=lambda r: order_map.get(str(r.block.opc_code), 10_000))
+
+    def _rebuild_table(self):
+        self._suspend_checks = True
         self.table.blockSignals(True)
         self.table.setRowCount(len(self.rows))
-        for i, (path, block) in enumerate(self.rows):
+        for i, r in enumerate(self.rows):
             chk = QtWidgets.QTableWidgetItem()
-            chk.setFlags(chk.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-            chk.setCheckState(QtCore.Qt.CheckState.Checked)
+            chk.setFlags(
+                QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                | QtCore.Qt.ItemFlag.ItemIsEnabled
+                | QtCore.Qt.ItemFlag.ItemIsSelectable
+            )
+            chk.setCheckState(
+                QtCore.Qt.CheckState.Checked if r.enabled
+                else QtCore.Qt.CheckState.Unchecked
+            )
             chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(i, self.COL_USE, chk)
 
@@ -426,117 +578,180 @@ class MainWindow(QtWidgets.QMainWindow):
             order_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(i, self.COL_ORDER, order_item)
 
-            opc_item = QtWidgets.QTableWidgetItem(str(block.opc_code))
+            opc_item = QtWidgets.QTableWidgetItem(str(r.block.opc_code))
             opc_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             f = opc_item.font(); f.setBold(True); opc_item.setFont(f)
             self.table.setItem(i, self.COL_OPC, opc_item)
 
-            self.table.setItem(i, self.COL_NAME,
-                               QtWidgets.QTableWidgetItem(str(block.name).strip()))
+            name_item = QtWidgets.QTableWidgetItem(str(r.block.name).strip())
+            name_item.setToolTip(str(r.block.name).strip())
+            self.table.setItem(i, self.COL_NAME, name_item)
 
-            rows_item = QtWidgets.QTableWidgetItem(str(block.row_count))
+            rows_item = QtWidgets.QTableWidgetItem(str(r.block.row_count))
             rows_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(i, self.COL_ROWS, rows_item)
 
-            file_item = QtWidgets.QTableWidgetItem(Path(path).name)
-            file_item.setToolTip(path)
+            file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)
+            file_item.setToolTip(r.path)
             self.table.setItem(i, self.COL_FILE, file_item)
         self.table.blockSignals(False)
-
-        # keep checkbox changes -> update count
-        try:
-            self.table.itemChanged.disconnect()
-        except Exception:
-            pass
-        self.table.itemChanged.connect(lambda *_: self._update_counts())
+        self._suspend_checks = False
         self._update_counts()
 
+    def _on_table_item_changed(self, item: QtWidgets.QTableWidgetItem):
+        if self._suspend_checks:
+            return
+        if item.column() != self.COL_USE:
+            return
+        row = item.row()
+        if 0 <= row < len(self.rows):
+            self.rows[row].enabled = (
+                item.checkState() == QtCore.Qt.CheckState.Checked
+            )
+        self._update_counts()
+
+    def _on_cell_double_clicked(self, row: int, col: int):
+        if 0 <= row < len(self.rows):
+            self.rows[row].enabled = not self.rows[row].enabled
+            it = self.table.item(row, self.COL_USE)
+            if it:
+                self._suspend_checks = True
+                it.setCheckState(
+                    QtCore.Qt.CheckState.Checked if self.rows[row].enabled
+                    else QtCore.Qt.CheckState.Unchecked
+                )
+                self._suspend_checks = False
+                self._update_counts()
+
     def _update_counts(self):
-        total = self.table.rowCount()
-        selected = 0
-        for i in range(total):
-            it = self.table.item(i, self.COL_USE)
-            if it and it.checkState() == QtCore.Qt.CheckState.Checked:
-                selected += 1
+        total = len(self.rows)
+        selected = sum(1 for r in self.rows if r.enabled)
         if self.tr_.is_rtl():
             self.count_label.setText(f"انتخاب‌شده: {selected} از {total}")
         else:
             self.count_label.setText(f"Selected: {selected} / {total}")
 
     def _set_all(self, checked: bool):
-        state = QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked
-        for i in range(self.table.rowCount()):
+        for r in self.rows:
+            r.enabled = checked
+        self._sync_checks_from_model()
+
+    def _invert_selection(self):
+        for r in self.rows:
+            r.enabled = not r.enabled
+        self._sync_checks_from_model()
+
+    def _sync_checks_from_model(self):
+        self._suspend_checks = True
+        for i, r in enumerate(self.rows):
             it = self.table.item(i, self.COL_USE)
             if it:
-                it.setCheckState(state)
+                it.setCheckState(
+                    QtCore.Qt.CheckState.Checked if r.enabled
+                    else QtCore.Qt.CheckState.Unchecked
+                )
+        self._suspend_checks = False
+        self._update_counts()
+
+    def _selected_row_indices(self) -> List[int]:
+        return sorted({idx.row() for idx in self.table.selectedIndexes()})
+
+    def _reselect_after_reorder(self, indices: List[int]):
+        self.table.clearSelection()
+        for i in indices:
+            if 0 <= i < self.table.rowCount():
+                self.table.selectRow(i)
 
     def _move_row(self, direction: int):
-        rows = sorted({idx.row() for idx in self.table.selectedIndexes()})
+        rows = self._selected_row_indices()
         if not rows:
             return
+        n = len(self.rows)
         if direction < 0:
+            new_sel = []
             for r in rows:
-                if r <= 0: continue
-                self.rows[r - 1], self.rows[r] = self.rows[r], self.rows[r - 1]
-            new_sel = [max(0, r - 1) for r in rows]
+                if r > 0 and (r - 1) not in new_sel:
+                    self.rows[r - 1], self.rows[r] = self.rows[r], self.rows[r - 1]
+                    new_sel.append(r - 1)
+                else:
+                    new_sel.append(r)
         else:
+            new_sel = []
             for r in reversed(rows):
-                if r >= len(self.rows) - 1: continue
-                self.rows[r + 1], self.rows[r] = self.rows[r], self.rows[r + 1]
-            new_sel = [min(len(self.rows) - 1, r + 1) for r in rows]
-
-        checks = [
-            self.table.item(i, self.COL_USE).checkState()
-            for i in range(self.table.rowCount())
-        ]
-        if direction < 0:
-            for r in rows:
-                if r <= 0: continue
-                checks[r - 1], checks[r] = checks[r], checks[r - 1]
-        else:
-            for r in reversed(rows):
-                if r >= len(checks) - 1: continue
-                checks[r + 1], checks[r] = checks[r], checks[r + 1]
-
+                if r < n - 1 and (r + 1) not in new_sel:
+                    self.rows[r + 1], self.rows[r] = self.rows[r], self.rows[r + 1]
+                    new_sel.append(r + 1)
+                else:
+                    new_sel.append(r)
         self._rebuild_table()
-        for i, st in enumerate(checks):
-            self.table.item(i, self.COL_USE).setCheckState(st)
-        self.table.clearSelection()
-        for r in new_sel:
-            self.table.selectRow(r)
+        self._reselect_after_reorder(sorted(new_sel))
+
+    def _move_top(self):
+        rows = self._selected_row_indices()
+        if not rows: return
+        moved = [self.rows[r] for r in rows]
+        keep = [r for i, r in enumerate(self.rows) if i not in rows]
+        self.rows = moved + keep
+        self._rebuild_table()
+        self._reselect_after_reorder(list(range(len(moved))))
+
+    def _move_bottom(self):
+        rows = self._selected_row_indices()
+        if not rows: return
+        moved = [self.rows[r] for r in rows]
+        keep = [r for i, r in enumerate(self.rows) if i not in rows]
+        self.rows = keep + moved
+        self._rebuild_table()
+        start = len(keep)
+        self._reselect_after_reorder(list(range(start, start + len(moved))))
 
     # ------------------------------------------------------ profile ops
     def _reload_profile_combo(self):
         current = self.profile_combo.currentText()
         self.profile_combo.blockSignals(True)
         self.profile_combo.clear()
-        self.profile_combo.addItem("")
+        self.profile_combo.addItem("")   # empty = no profile
         for name in pm.list_profiles():
             self.profile_combo.addItem(name)
-        if current:
-            idx = self.profile_combo.findText(current)
+        # restore last profile
+        target = current or self.app_settings.last_profile or ""
+        if target:
+            idx = self.profile_combo.findText(target)
             if idx >= 0:
                 self.profile_combo.setCurrentIndex(idx)
         self.profile_combo.blockSignals(False)
 
+    def _on_profile_changed(self, _idx: int):
+        # Only auto-load when the user actively picks a non-empty profile
+        name = self.profile_combo.currentText().strip()
+        self.app_settings.last_profile = name
+        self.app_settings.save()
+
     def _on_load_profile(self):
         name = self.profile_combo.currentText().strip()
         if not name:
+            QtWidgets.QMessageBox.information(
+                self, self.tr_.t("info"),
+                self.tr_.t("no_profile_selected"),
+            )
             return
         profile = pm.load_profile(name)
         if profile is None:
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_.t("warning"),
+                self.tr_.t("profile_missing", name=name),
+            )
             return
         if profile.template_path and Path(profile.template_path).exists():
             self.template_edit.setText(profile.template_path)
         if profile.settings:
             self.merge_settings = profile.settings
-        self._rebuild_table()
+        if profile.stations and self.rows:
+            self._apply_profile_to_rows(profile)
+            self._rebuild_table()
         self.app_settings.last_profile = name
         self.app_settings.save()
-        QtWidgets.QMessageBox.information(
-            self, self.tr_.t("info"),
-            self.tr_.t("profile_loaded", name=name),
-        )
+        self.status.showMessage("● " + self.tr_.t("profile_loaded", name=name))
 
     def _on_save_profile(self):
         default_name = ""
@@ -546,6 +761,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 break
         if not default_name:
             default_name = self.profile_combo.currentText().strip()
+
         name, ok = QtWidgets.QInputDialog.getText(
             self, self.tr_.t("profile_title"),
             self.tr_.t("profile_name_prompt"),
@@ -553,34 +769,49 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if not ok or not name.strip():
             return
-        order: List[str] = []
-        for i, (_p, block) in enumerate(self.rows):
-            it = self.table.item(i, self.COL_USE)
-            if it and it.checkState() == QtCore.Qt.CheckState.Checked:
-                order.append(str(block.opc_code))
+        name = name.strip()
+
+        # If exists, ask for overwrite
+        if name in pm.list_profiles():
+            ans = QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"),
+                self.tr_.t("overwrite_profile", name=name),
+            )
+            if ans != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
+
+        # Build stations list (order + check state)
+        stations = [
+            pm.StationEntry(
+                opc=str(r.block.opc_code),
+                name=str(r.block.name),
+                enabled=r.enabled,
+            )
+            for r in self.rows
+        ]
         product_name = ""
         product_code = ""
         for a in self.workbooks.values():
             if a.product_name: product_name = a.product_name
             if a.product_code: product_code = a.product_code
             if product_name and product_code: break
+
         profile = pm.ProductProfile(
-            name=name.strip(),
+            name=name,
             product_name=product_name,
             product_code=product_code,
             template_path=self.template_edit.text(),
-            station_order=order,
+            stations=stations,
             settings=self.merge_settings,
         )
         pm.save_profile(profile)
         self._reload_profile_combo()
-        idx = self.profile_combo.findText(name.strip())
+        idx = self.profile_combo.findText(name)
         if idx >= 0:
             self.profile_combo.setCurrentIndex(idx)
-        QtWidgets.QMessageBox.information(
-            self, self.tr_.t("info"),
-            self.tr_.t("profile_saved", name=name.strip()),
-        )
+        self.app_settings.last_profile = name
+        self.app_settings.save()
+        self.status.showMessage("● " + self.tr_.t("profile_saved", name=name))
 
     def _on_delete_profile(self):
         name = self.profile_combo.currentText().strip()
@@ -603,24 +834,28 @@ class MainWindow(QtWidgets.QMainWindow):
             self.app_settings.save()
             self.tr_.set_lang(self.app_settings.language)
             self._apply_language()
+            # re-parse files with new settings
             self._refresh_all()
 
     # ------------------------------------------------------------- merge
     def _do_merge(self):
         template = self.template_edit.text().strip()
-        if not template or not Path(template).exists():
+        if not template:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_template"))
+            return
+        if not Path(template).exists():
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_.t("warning"),
+                self.tr_.t("template_missing", path=template))
             return
         if not self.rows:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_files"))
             return
-        selections: List[Tuple[str, StationBlock]] = []
-        for i, (path, block) in enumerate(self.rows):
-            it = self.table.item(i, self.COL_USE)
-            if it and it.checkState() == QtCore.Qt.CheckState.Checked:
-                selections.append((path, block))
+        selections: List[Tuple[str, StationBlock]] = [
+            (r.path, r.block) for r in self.rows if r.enabled
+        ]
         if not selections:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_selection"))
@@ -630,10 +865,24 @@ class MainWindow(QtWidgets.QMainWindow):
         if not output:
             output = str(OUTPUT_DIR / "Merged_PFMEA.xlsx")
             self.output_edit.setText(output)
+        if not output.lower().endswith(".xlsx"):
+            output += ".xlsx"
+            self.output_edit.setText(output)
+
+        # If output already exists, ask for confirmation
+        if Path(output).exists():
+            ans = QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"),
+                self.tr_.t("overwrite_output", path=output),
+            )
+            if ans != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
 
         self.merge_btn.setEnabled(False)
+        self.open_output_btn.setEnabled(False)
         self.progress.setValue(0)
         self.status.showMessage("● " + self.tr_.t("processing"))
+        self._save_last()
 
         self._worker = MergeWorker(
             template, selections, output, self.merge_settings,
@@ -652,40 +901,126 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_finished(self, out_path: str):
         self.merge_btn.setEnabled(True)
         self.progress.setValue(100)
-        self.status.showMessage("● " + self.tr_.t("ready"))
-        box = QtWidgets.QMessageBox(self)
-        box.setIcon(QtWidgets.QMessageBox.Icon.Information)
-        box.setWindowTitle(self.tr_.t("info"))
-        box.setText(self.tr_.t("merge_success", path=out_path))
-        open_btn = box.addButton(
-            "📂 " + ("باز کردن پوشه" if self.tr_.is_rtl() else "Open folder"),
-            QtWidgets.QMessageBox.ButtonRole.ActionRole,
+        self._last_output = out_path
+        self.open_output_btn.setEnabled(True)
+        self.status.showMessage(
+            "● " + self.tr_.t("merge_done_status", path=Path(out_path).name)
         )
-        box.addButton(QtWidgets.QMessageBox.StandardButton.Ok)
-        box.exec()
-        if box.clickedButton() is open_btn:
-            self._open_folder(str(Path(out_path).parent))
+        if self.open_after_chk.isChecked():
+            self._open_file(out_path)
+        else:
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Icon.Information)
+            box.setWindowTitle(self.tr_.t("info"))
+            box.setText(self.tr_.t("merge_success", path=out_path))
+            open_btn = box.addButton(
+                "📂 " + ("باز کردن پوشه" if self.tr_.is_rtl() else "Open folder"),
+                QtWidgets.QMessageBox.ButtonRole.ActionRole,
+            )
+            file_btn = box.addButton(
+                "📄 " + ("باز کردن فایل" if self.tr_.is_rtl() else "Open file"),
+                QtWidgets.QMessageBox.ButtonRole.ActionRole,
+            )
+            box.addButton(QtWidgets.QMessageBox.StandardButton.Ok)
+            box.exec()
+            if box.clickedButton() is open_btn:
+                self._open_folder(str(Path(out_path).parent))
+            elif box.clickedButton() is file_btn:
+                self._open_file(out_path)
+
+    def _open_last_output(self):
+        if self._last_output and Path(self._last_output).exists():
+            self._open_file(self._last_output)
 
     def _open_folder(self, folder: str):
         try:
             if os.name == "nt":
-                os.startfile(folder)  # type: ignore
-            elif sys_is_mac():
+                os.startfile(folder)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
                 os.system(f'open "{folder}"')
             else:
                 os.system(f'xdg-open "{folder}" >/dev/null 2>&1 &')
         except Exception:
             pass
 
+    def _open_file(self, path: str):
+        try:
+            if os.name == "nt":
+                os.startfile(path)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                os.system(f'open "{path}"')
+            else:
+                os.system(f'xdg-open "{path}" >/dev/null 2>&1 &')
+        except Exception:
+            pass
+
+    # ----------------------------------------------------- context menu
+    def _show_context_menu(self, pos: QtCore.QPoint):
+        rows = self._selected_row_indices()
+        if not rows:
+            return
+        t = self.tr_.t
+        menu = QtWidgets.QMenu(self)
+        act_toggle = menu.addAction("☑ " + t("toggle"))
+        act_check = menu.addAction("☑ " + t("select_all"))
+        act_uncheck = menu.addAction("☐ " + t("deselect_all"))
+        menu.addSeparator()
+        act_top = menu.addAction("⏫ " + t("move_top"))
+        act_up = menu.addAction("⬆ " + t("move_up"))
+        act_down = menu.addAction("⬇ " + t("move_down"))
+        act_bot = menu.addAction("⏬ " + t("move_bottom"))
+        menu.addSeparator()
+        act_del = menu.addAction("🗑 " + t("remove_selected"))
+        chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
+        if chosen is act_toggle: self._toggle_selected()
+        elif chosen is act_check:
+            for r in rows: self.rows[r].enabled = True
+            self._sync_checks_from_model()
+        elif chosen is act_uncheck:
+            for r in rows: self.rows[r].enabled = False
+            self._sync_checks_from_model()
+        elif chosen is act_top:    self._move_top()
+        elif chosen is act_up:     self._move_row(-1)
+        elif chosen is act_down:   self._move_row(+1)
+        elif chosen is act_bot:    self._move_bottom()
+        elif chosen is act_del:    self._remove_selected()
+
+    def _toggle_selected(self):
+        rows = self._selected_row_indices()
+        if not rows: return
+        for r in rows:
+            if 0 <= r < len(self.rows):
+                self.rows[r].enabled = not self.rows[r].enabled
+        self._sync_checks_from_model()
+
+    # ----------------------------------------------------- drag & drop
+    def dragEnterEvent(self, e: QtGui.QDragEnterEvent) -> None:
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+
+    def dropEvent(self, e: QtGui.QDropEvent) -> None:
+        paths: List[str] = []
+        for url in e.mimeData().urls():
+            p = url.toLocalFile()
+            if not p:
+                continue
+            path = Path(p)
+            if path.is_dir():
+                paths.extend(str(x) for x in path.glob("*.xlsx")
+                             if not x.name.startswith("~$"))
+            elif path.suffix.lower() in (".xlsx", ".xlsm"):
+                paths.append(str(path))
+        if paths:
+            self._add_paths(sorted(set(paths)))
+
     def _on_failed(self, err: str):
         self.merge_btn.setEnabled(True)
         self.status.showMessage("● " + self.tr_.t("ready"))
-        QtWidgets.QMessageBox.critical(
-            self, self.tr_.t("error"),
-            self.tr_.t("merge_error", err=err),
-        )
-
-
-def sys_is_mac() -> bool:
-    import sys as _s
-    return _s.platform == "darwin"
+        # Show short error at top, full traceback in Details
+        first_line = err.splitlines()[0] if err else "unknown error"
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+        box.setWindowTitle(self.tr_.t("error"))
+        box.setText(self.tr_.t("merge_error", err=first_line))
+        box.setDetailedText(err)
+        box.exec()

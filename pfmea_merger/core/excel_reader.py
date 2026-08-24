@@ -8,7 +8,7 @@ A PFMEA file layout (as understood by this tool):
     Rows footer_start .. end           -> Footer (signatures, distribution)
 
 For every "station block" the first row has an OPC code in column A and
-a station name in column B (often A/B are merged across the whole block).
+a station name in column B (A/B are often merged across the whole block).
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
 import openpyxl
-from openpyxl.utils import get_column_letter
 
 from .config import MergeSettings
 
@@ -24,12 +23,12 @@ from .config import MergeSettings
 @dataclass
 class StationBlock:
     """One station inside a source workbook (row range in that workbook)."""
-    opc_code: str                       # e.g. "A123"
-    name: str                           # e.g. "SMD"
-    start_row: int                      # first data row (in source)
-    end_row: int                        # last data row (in source, inclusive)
-    source_file: str = ""               # source workbook path
-    order_index: int = 0                # order inside its source file
+    opc_code: str
+    name: str
+    start_row: int
+    end_row: int
+    source_file: str = ""
+    order_index: int = 0
 
     @property
     def row_count(self) -> int:
@@ -43,7 +42,6 @@ class StationBlock:
 
 @dataclass
 class WorkbookAnalysis:
-    """Result of analysing a single input workbook."""
     path: str
     sheet_name: str
     stations: List[StationBlock] = field(default_factory=list)
@@ -62,17 +60,32 @@ def _cell_str(value) -> str:
     return str(value).strip()
 
 
-def _find_footer_start(ws, settings: MergeSettings) -> Optional[int]:
+def last_non_empty_row(ws) -> int:
     """
-    Look for the first row (scanning columns 1..scan_cols) that contains
-    any of the footer marker keywords. That row (and everything below it)
-    is considered footer.
+    Return the row number of the last cell that actually contains a value.
+
+    openpyxl's ws.max_row can be very optimistic — some files report 834
+    when only the first 16 rows have real content. This walks upward until
+    it finds a real value.
+    """
+    max_col = min(ws.max_column, 65)
+    for r in range(ws.max_row, 0, -1):
+        for c in range(1, max_col + 1):
+            if ws.cell(row=r, column=c).value is not None:
+                return r
+    return ws.max_row
+
+
+def _find_footer_start(ws, settings: MergeSettings, effective_max_row: int) -> Optional[int]:
+    """
+    Look for the first row in [data_start_row..effective_max_row] whose columns
+    1..scan_cols contain any footer marker keyword.
     """
     markers = [m.strip() for m in settings.footer_markers if m and m.strip()]
     if not markers:
         return None
-    scan_cols = min(ws.max_column, 15)
-    for row in range(settings.data_start_row, ws.max_row + 1):
+    scan_cols = min(ws.max_column, 20)
+    for row in range(settings.data_start_row, effective_max_row + 1):
         for col in range(1, scan_cols + 1):
             val = _cell_str(ws.cell(row=row, column=col).value)
             if not val:
@@ -83,32 +96,34 @@ def _find_footer_start(ws, settings: MergeSettings) -> Optional[int]:
     return None
 
 
+def _looks_like_opc(opc: str, max_len: int) -> bool:
+    if not opc:
+        return False
+    if len(opc) > max_len:
+        return False
+    if any(ch in opc for ch in ("\n", "\r", ":")):
+        return False
+    # An OPC code is a short identifier, typically alphanumeric.
+    # Allow at most one internal space (very rare); reject long text.
+    if opc.count(" ") > 1:
+        return False
+    return True
+
+
 def _find_stations(ws, settings: MergeSettings, data_end_row: int) -> List[StationBlock]:
     """
     Walk the OPC column between data_start_row and data_end_row and build
     StationBlock objects. A new station begins whenever a non-empty OPC
-    code appears in column A; the block ends just before the next code
-    (or at data_end_row).
+    code appears in column A; the block ends just before the next code.
     """
     opc_col = settings.opc_column
     name_col = settings.name_column
-
-    # Collect all rows where an OPC code is set. We treat a cell as an OPC
-    # code only if it is short (real codes are usually <=6 chars) and does
-    # not contain whitespace / newlines / colons — that filters out footer
-    # rows that happen to spill into column A (e.g. legend text).
     max_len = getattr(settings, "max_opc_length", 20)
+
     starts: List[Tuple[int, str, str]] = []
     for row in range(settings.data_start_row, data_end_row + 1):
         opc = _cell_str(ws.cell(row=row, column=opc_col).value)
-        if not opc:
-            continue
-        if len(opc) > max_len:
-            continue
-        if any(ch in opc for ch in ("\n", "\r", ":")):
-            continue
-        # allow at most one internal space (rare); reject long multi-word text
-        if opc.count(" ") > 1:
+        if not _looks_like_opc(opc, max_len):
             continue
         name = _cell_str(ws.cell(row=row, column=name_col).value)
         starts.append((row, opc, name))
@@ -135,7 +150,6 @@ def _extract_product_info(ws) -> Tuple[str, str]:
             val = _cell_str(ws.cell(row=row, column=col).value)
             if not val:
                 continue
-            # نام قطعه: SBM SOREN ...
             if "نام قطعه" in val:
                 after = val.split(":", 1)[-1].strip()
                 if after:
@@ -158,10 +172,9 @@ def analyze_workbook(path: str | Path, settings: MergeSettings) -> WorkbookAnaly
             error=f"cannot open: {e}",
         )
 
-    # Find the target sheet (case-insensitive fallback)
+    # find sheet (case-insensitive fallback)
     sheet_name = settings.sheet_name
     if sheet_name not in wb.sheetnames:
-        # Try to find a sheet whose stripped/lowered name matches
         lower = sheet_name.strip().lower()
         for name in wb.sheetnames:
             if name.strip().lower() == lower:
@@ -175,8 +188,9 @@ def analyze_workbook(path: str | Path, settings: MergeSettings) -> WorkbookAnaly
             )
     ws = wb[sheet_name]
 
-    footer_start = _find_footer_start(ws, settings)
-    data_end = (footer_start - 1) if footer_start else ws.max_row
+    effective_max = last_non_empty_row(ws)
+    footer_start = _find_footer_start(ws, settings, effective_max)
+    data_end = (footer_start - 1) if footer_start else effective_max
     stations = _find_stations(ws, settings, data_end)
     for s in stations:
         s.source_file = path

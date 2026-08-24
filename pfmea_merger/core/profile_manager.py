@@ -1,7 +1,7 @@
 """
-Product profiles: save/load the ordered list of stations, the template
-path and the merge settings for a given product so the user does not have
-to reconfigure the app on every run.
+Product profiles: save/load the ordered list of stations, their
+enabled/disabled state, template path and merge settings so the user
+doesn't have to reconfigure the app on every run.
 
 Each profile is a JSON file in ./profiles/<name>.json
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 import json
 import re
 
@@ -25,36 +25,82 @@ def _safe_filename(name: str) -> str:
 
 
 @dataclass
+class StationEntry:
+    """A saved station in a profile: its OPC code, name and check state."""
+    opc: str
+    name: str = ""
+    enabled: bool = True
+
+    def to_dict(self) -> dict:
+        return {"opc": self.opc, "name": self.name, "enabled": self.enabled}
+
+    @classmethod
+    def from_dict(cls, d) -> "StationEntry":
+        if isinstance(d, str):
+            # backwards compat: old profiles stored plain strings
+            return cls(opc=d, name="", enabled=True)
+        return cls(
+            opc=str(d.get("opc", "")),
+            name=str(d.get("name", "")),
+            enabled=bool(d.get("enabled", True)),
+        )
+
+
+@dataclass
 class ProductProfile:
     name: str = ""
     product_name: str = ""
     product_code: str = ""
     template_path: str = ""
-    station_order: List[str] = field(default_factory=list)   # OPC codes
+    stations: List[StationEntry] = field(default_factory=list)
     settings: MergeSettings = field(default_factory=MergeSettings)
 
+    # ---- helpers ---------------------------------------------------
+    @property
+    def station_order(self) -> List[str]:
+        """OPC codes in profile order (backwards-compat helper)."""
+        return [s.opc for s in self.stations]
+
+    def enabled_set(self) -> set:
+        return {s.opc for s in self.stations if s.enabled}
+
+    def order_index(self, opc: str) -> int:
+        for i, s in enumerate(self.stations):
+            if s.opc == opc:
+                return i
+        return 10_000
+
+    # ---- (de)serialisation ----------------------------------------
     def to_dict(self) -> dict:
         return {
             "name": self.name,
             "product_name": self.product_name,
             "product_code": self.product_code,
             "template_path": self.template_path,
-            "station_order": list(self.station_order),
+            "stations": [s.to_dict() for s in self.stations],
             "settings": self.settings.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProductProfile":
         settings = MergeSettings.from_dict(d.get("settings", {}))
+        # Prefer new "stations" field; fall back to old "station_order".
+        raw_stations = d.get("stations")
+        if raw_stations is None:
+            raw_stations = d.get("station_order", [])
+        stations = [StationEntry.from_dict(x) for x in raw_stations]
         return cls(
             name=d.get("name", ""),
             product_name=d.get("product_name", ""),
             product_code=d.get("product_code", ""),
             template_path=d.get("template_path", ""),
-            station_order=list(d.get("station_order", [])),
+            stations=stations,
             settings=settings,
         )
 
+
+# ---------------------------------------------------------------------------
+# File-system operations
 
 def profile_path(name: str) -> Path:
     return PROFILES_DIR / f"{_safe_filename(name)}.json"
@@ -73,9 +119,10 @@ def list_profiles() -> List[str]:
 
 
 def load_profile(name: str) -> Optional[ProductProfile]:
+    if not name:
+        return None
     p = profile_path(name)
     if not p.exists():
-        # try by name field
         for f in PROFILES_DIR.glob("*.json"):
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))

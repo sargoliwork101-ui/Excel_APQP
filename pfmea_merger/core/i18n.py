@@ -113,6 +113,48 @@ STRINGS = {
     "product_code_lbl": {"fa": "کد محصول:", "en": "Product code:"},
     "ready": {"fa": "آماده", "en": "Ready"},
     "processing": {"fa": "در حال پردازش...", "en": "Processing..."},
+
+    # ---- new keys
+    "remove_selected": {"fa": "حذف انتخاب‌شده", "en": "Remove Selected"},
+    "invert": {"fa": "معکوس", "en": "Invert"},
+    "move_top": {"fa": "بالاترین", "en": "Move to top"},
+    "move_bottom": {"fa": "پایین‌ترین", "en": "Move to bottom"},
+    "open_output": {"fa": "باز کردن خروجی", "en": "Open output"},
+    "open_after": {"fa": "پس از تجمیع فایل را باز کن", "en": "Open output after merge"},
+    "refreshed": {"fa": "به‌روزرسانی انجام شد.", "en": "Refreshed."},
+    "clear_confirm": {
+        "fa": "تمام فایل‌ها و ایستگاه‌های بارگذاری‌شده پاک شوند؟",
+        "en": "Clear all loaded files and stations?",
+    },
+    "no_profile_selected": {
+        "fa": "هیچ پروفایلی انتخاب نشده است. از لیست کشویی یک پروفایل انتخاب کنید.",
+        "en": "No profile selected. Pick one from the dropdown first.",
+    },
+    "profile_missing": {
+        "fa": "پروفایل «{name}» پیدا نشد.",
+        "en": "Profile '{name}' not found.",
+    },
+    "overwrite_profile": {
+        "fa": "پروفایلی به نام «{name}» از قبل وجود دارد. جایگزین شود؟",
+        "en": "A profile named '{name}' already exists. Overwrite?",
+    },
+    "overwrite_output": {
+        "fa": "فایل خروجی از قبل وجود دارد:\n{path}\n\nجایگزین شود؟",
+        "en": "Output file already exists:\n{path}\n\nOverwrite?",
+    },
+    "template_missing": {
+        "fa": "فایل قالب پیدا نشد:\n{path}",
+        "en": "Template file not found:\n{path}",
+    },
+    "no_xlsx_in_folder": {
+        "fa": "در پوشه انتخاب‌شده هیچ فایل .xlsx وجود ندارد.",
+        "en": "The selected folder contains no .xlsx files.",
+    },
+    "merge_done_status": {
+        "fa": "تجمیع کامل شد ← {path}",
+        "en": "Merge complete → {path}",
+    },
+    "toggle": {"fa": "تغییر وضعیت", "en": "Toggle"},
 }
 
 

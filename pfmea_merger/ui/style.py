@@ -85,7 +85,8 @@ QToolTip {{
 }}
 
 /* ----- Line edits / combo / spin ----- */
-QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox,
+QAbstractSpinBox {{
     background: {BG_ELEV};
     color: {TEXT};
     border: 1px solid {BORDER};
@@ -93,6 +94,7 @@ QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     padding: 6px 8px;
     selection-background-color: {SEL_BG};
     selection-color: white;
+    min-height: 22px;
 }}
 
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus,
