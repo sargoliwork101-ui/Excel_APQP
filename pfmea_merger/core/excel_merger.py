@@ -326,12 +326,21 @@ def _attach_template_drawing(output_path: str, template_path: str) -> None:
                     '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ',
                     1,
                 )
+            # Preserve existing worksheet relationships instead of replacing
+            # the whole .rels file (which used to silently remove hyperlinks
+            # and other relationships). Pick an unused relationship id.
+            sheet_rels = "xl/worksheets/_rels/sheet1.xml.rels"
+            old_rels = out.read(sheet_rels).decode("utf-8") if sheet_rels in out.namelist() else (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>')
+            ids = [int(x) for x in re.findall(r'Id="rId(\d+)"', old_rels)]
+            drawing_rid = f"rId{max(ids, default=0) + 1}"
             if "<drawing " not in sheet_xml:
-                sheet_xml = sheet_xml.replace("</worksheet>", '<drawing r:id="rId2"/></worksheet>')
-            rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '
-                        'Target="../drawings/drawing1.xml"/></Relationships>')
+                sheet_xml = sheet_xml.replace("</worksheet>", f'<drawing r:id="{drawing_rid}"/></worksheet>')
+            rel = (f'<Relationship Id="{drawing_rid}" '
+                   'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '
+                   'Target="../drawings/drawing1.xml"/>')
+            rels_xml = old_rels.replace("</Relationships>", rel + "</Relationships>")
             content = out.read("[Content_Types].xml").decode("utf-8")
             if 'Extension="png"' not in content:
                 content = content.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>')
@@ -392,8 +401,17 @@ def merge_pfmea(
     template_wb = openpyxl.load_workbook(template_path, keep_links=False)
 
     tpl_sheet_name = settings.sheet_name
+    # Excel sheet names may contain trailing spaces or differ only in case.
+    # Use the actual workbook name after a tolerant lookup so the rest of the
+    # merge operates on the correct sheet.
     if tpl_sheet_name not in template_wb.sheetnames:
-        raise ValueError(f"Template does not contain sheet '{tpl_sheet_name}'")
+        wanted = tpl_sheet_name.strip().lower()
+        actual = next((name for name in template_wb.sheetnames
+                       if name.strip().lower() == wanted), None)
+        if actual is None:
+            template_wb.close()
+            raise ValueError(f"Template does not contain sheet '{tpl_sheet_name}'")
+        tpl_sheet_name = actual
     tpl_ws = template_wb[tpl_sheet_name]
 
     tpl_analysis = analyze_workbook(template_path, settings)
