@@ -30,9 +30,11 @@ class StationEntry:
     opc: str
     name: str = ""
     enabled: bool = True
+    cp_path: str = ""
+    cp_enabled: bool = False
 
     def to_dict(self) -> dict:
-        return {"opc": self.opc, "name": self.name, "enabled": self.enabled}
+        return {"opc": self.opc, "name": self.name, "enabled": self.enabled, "cp_path": self.cp_path, "cp_enabled": self.cp_enabled}
 
     @classmethod
     def from_dict(cls, d) -> "StationEntry":
@@ -43,6 +45,8 @@ class StationEntry:
             opc=str(d.get("opc", "")),
             name=str(d.get("name", "")),
             enabled=bool(d.get("enabled", True)),
+            cp_path=str(d.get("cp_path", "")),
+            cp_enabled=bool(d.get("cp_enabled", False)),
         )
 
 
