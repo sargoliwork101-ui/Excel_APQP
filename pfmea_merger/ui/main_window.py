@@ -202,6 +202,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_browse_btn.clicked.connect(self._pick_template)
         self.template_open_btn.clicked.connect(self._open_template)
         self.template_edit.installEventFilter(self)
+        self.cp_template_label = QtWidgets.QLabel("Template CP")
+        self.cp_template_label.setObjectName("SectionLabel")
+        self.cp_template_edit = QtWidgets.QLineEdit()
+        self.cp_template_edit.setReadOnly(True)
+        self.cp_template_browse_btn = QtWidgets.QPushButton("انتخاب Template CP")
+        self.cp_template_browse_btn.clicked.connect(self._pick_cp_template)
 
         self.profile_label = QtWidgets.QLabel()
         self.profile_label.setObjectName("SectionLabel")
@@ -220,11 +226,14 @@ class MainWindow(QtWidgets.QMainWindow):
         c1.addWidget(self.template_edit,        0, 1, 1, 4)
         c1.addWidget(self.template_open_btn,    0, 5)
         c1.addWidget(self.template_browse_btn,  0, 6)
-        c1.addWidget(self.profile_label,        1, 0)
-        c1.addWidget(self.profile_combo,        1, 1, 1, 2)
-        c1.addWidget(self.profile_load_btn,     1, 3)
-        c1.addWidget(self.profile_save_btn,     1, 4)
-        c1.addWidget(self.profile_delete_btn,   1, 5, 1, 2)
+        c1.addWidget(self.cp_template_label,    1, 0)
+        c1.addWidget(self.cp_template_edit,     1, 1, 1, 5)
+        c1.addWidget(self.cp_template_browse_btn, 1, 6)
+        c1.addWidget(self.profile_label,        2, 0)
+        c1.addWidget(self.profile_combo,        2, 1, 1, 2)
+        c1.addWidget(self.profile_load_btn,     2, 3)
+        c1.addWidget(self.profile_save_btn,     2, 4)
+        c1.addWidget(self.profile_delete_btn,   2, 5, 1, 2)
         c1.setColumnStretch(1, 1)
         c1.setColumnStretch(2, 1)
         root.addWidget(card1)
@@ -379,7 +388,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress.setValue(0)
         self.progress.setTextVisible(True)
 
-        c3.addWidget(self.cp_merge_btn,         1, 0, 1, 2)
         c3.addWidget(self.output_label,        0, 0)
         c3.addWidget(self.output_edit,         0, 1, 1, 3)
         c3.addWidget(self.output_browse_btn,   0, 4)
@@ -394,6 +402,7 @@ class MainWindow(QtWidgets.QMainWindow):
         c3.addWidget(self.merge_btn,           2, 0, 1, 2)
         c3.addWidget(self.progress,            2, 2, 1, 2)
         c3.addWidget(self.open_output_btn,     2, 4)
+        c3.addWidget(self.cp_merge_btn,        3, 0, 1, 5)
         c3.setColumnStretch(1, 1)
         c3.setColumnStretch(2, 1)
         root.addWidget(card3)
@@ -1377,11 +1386,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.failed.connect(self._on_failed)
         self._worker.start()
 
+    def _pick_cp_template(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Template CP", str(TEMPLATES_DIR), "Excel (*.xlsx *.xlsm)")
+        if path: self.cp_template_edit.setText(path)
+
     def _do_cp_merge(self):
         """Build a CP output independently, without mixing it with PFMEA."""
-        template, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "انتخاب Template CP / Select CP template", str(TEMPLATES_DIR),
-            "Excel (*.xlsx *.xlsm)")
+        template = self.cp_template_edit.text().strip()
+        if not template:
+            self._pick_cp_template(); template = self.cp_template_edit.text().strip()
         if not template: return
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, "انتخاب پوشه فایل‌های CP / Select CP folder")
