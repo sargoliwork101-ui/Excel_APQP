@@ -142,7 +142,7 @@ def _find_stations(ws, settings: MergeSettings, data_end_row: int) -> List[Stati
         # one per line.
         failure_modes = []
         for failure_row in range(start_row, end_row + 1):
-            mode = _cell_str(ws.cell(row=failure_row, column=3).value)
+            mode = _cell_str(ws.cell(row=failure_row, column=settings.failure_mode_column).value)
             if mode:
                 failure_modes.append(mode)
         stations.append(StationBlock(

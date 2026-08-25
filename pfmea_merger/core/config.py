@@ -25,7 +25,7 @@ DEFAULT_FOOTER_MARKERS = [
 ]
 DEFAULT_MAX_OPC_LEN = 20    # anything longer in column A is probably not an OPC code
 DEFAULT_RPN_TOP_PERCENT = 20  # percentage of highest RPN values highlighted
-APP_VERSION = "V00.1.102"
+APP_VERSION = "V00.1.103"
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = APP_ROOT / "profiles"
@@ -44,6 +44,10 @@ class MergeSettings:
     data_start_row: int = DEFAULT_DATA_START_ROW
     opc_column: int = DEFAULT_OPC_COLUMN
     name_column: int = DEFAULT_NAME_COLUMN
+    failure_mode_column: int = 3
+    so_column: int = 9
+    rpn_column: int = 13
+    aq2_cell: str = "AQ2"
     sheet_name: str = DEFAULT_SHEET_NAME
     history_sheet: str = DEFAULT_HISTORY_SHEET
     footer_markers: List[str] = field(default_factory=lambda: list(DEFAULT_FOOTER_MARKERS))
@@ -68,6 +72,7 @@ class MergeSettings:
         if not isinstance(values.get("footer_markers", []), list):
             values["footer_markers"] = list(DEFAULT_FOOTER_MARKERS)
         for key in ("header_rows", "data_start_row", "opc_column", "name_column",
+                    "failure_mode_column", "so_column", "rpn_column",
                     "max_opc_length", "rpn_top_percent", "failure_row_height",
                     "failure_column_width"):
             if key in values:

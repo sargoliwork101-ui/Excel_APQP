@@ -202,29 +202,31 @@ def _copy_whole_sheet(src_ws: Worksheet, dst_ws: Worksheet) -> None:
 _last_non_empty_row = last_non_empty_row
 
 
-def _rewrite_so_rpn_formulas(ws: Worksheet, data_start: int, data_end: int) -> None:
+def _rewrite_so_rpn_formulas(ws: Worksheet, data_start: int, data_end: int,
+                             settings: MergeSettings) -> None:
     """Write SO and RPN formulas explicitly for every merged data row."""
     from openpyxl.cell.cell import MergedCell
+    e_col = get_column_letter(5)
+    h_col = get_column_letter(8)
+    l_col = get_column_letter(12)
     for row in range(data_start, data_end + 1):
-        # E = Severity, H = Occurrence, L = Detection, I = SO, M = RPN.
-        # Do not trust formulas copied from source files: after rows are moved
-        # their references can point to the old source row.
-        so_cell = ws.cell(row=row, column=9)
-        rpn_cell = ws.cell(row=row, column=13)
+        so_cell = ws.cell(row=row, column=settings.so_column)
+        rpn_cell = ws.cell(row=row, column=settings.rpn_column)
         # Some PFMEA templates merge the first station's descriptive row
         # across C:V, which makes I/M read-only MergedCell placeholders.
         if not isinstance(so_cell, MergedCell):
-            so_cell.value = f"=H{row}*E{row}"
+            so_cell.value = f"={h_col}{row}*{e_col}{row}"
         if not isinstance(rpn_cell, MergedCell):
-            rpn_cell.value = f"=L{row}*H{row}*E{row}"
+            rpn_cell.value = f"={l_col}{row}*{h_col}{row}*{e_col}{row}"
 
 
 def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
-                        percent: int) -> None:
-    """Update the template's AQ2 top-RPN formula for the merged data range."""
+                        percent: int, settings: MergeSettings) -> None:
+    """Update the template's top-RPN formula for the merged data range."""
     if data_end < data_start:
         return
-    cell = ws["AQ2"]
+    cell = ws[settings.aq2_cell]
+    rpn_letter = get_column_letter(settings.rpn_column)
     old = cell.value
     # openpyxl 3.1 reads the template's AQ2 as an ArrayFormula object.
     # Work with its text while retaining the array-formula representation.
@@ -235,10 +237,11 @@ def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
         # M10:M901 range in the merged workbook.
         # Preserve the template's first RPN row (the supplied template uses
         # row 10, while the station parser starts at row 9).
-        match = re.search(r"\$M\$(\d+):\$M\$?\d+", formula)
+        pattern = rf"\${re.escape(rpn_letter)}\$(\d+):\${re.escape(rpn_letter)}\$?\d+"
+        match = re.search(pattern, formula, re.IGNORECASE)
         formula_start = int(match.group(1)) if match else data_start
-        rng = f"$M${formula_start}:$M${data_end}"
-        formula = re.sub(r"\$M\$\d+:\$M\$?\d+", rng, formula)
+        rng = f"${rpn_letter}${formula_start}:${rpn_letter}${data_end}"
+        formula = re.sub(rf"\${re.escape(rpn_letter)}\$\d+:\${re.escape(rpn_letter)}\$?\d+", rng, formula, flags=re.IGNORECASE)
         # The template currently contains *0.2. Replace that multiplier while
         # retaining any future formula structure around it.
         formula = re.sub(r"\*\s*0(?:\.\d+)?", f"*{percent / 100:g}", formula,
@@ -255,13 +258,14 @@ def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
         end = max(data_end, data_start)
         factor = percent / 100
         cell.value = (
-            f"=INDEX(_xlfn._xlws.SORT($M${data_start}:$M${end},1,-1),"
-            f"COUNT(_xlfn._xlws.SORT($M${data_start}:$M${end},1,-1))*{factor:g})"
+            f"=INDEX(_xlfn._xlws.SORT(${rpn_letter}${data_start}:${rpn_letter}${end},1,-1),"
+            f"COUNT(_xlfn._xlws.SORT(${rpn_letter}${data_start}:${rpn_letter}${end},1,-1))*{factor:g})"
         )
 
 
 def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
-                                 data_start: int, data_end: int) -> None:
+                                 data_start: int, data_end: int,
+                                 rpn_column: int = 13) -> None:
     """Copy template conditional-format rules, expanding data rules to output."""
     if not src_ws.conditional_formatting:
         return
@@ -274,6 +278,10 @@ def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
                 min_col, min_row, max_col, max_row = range_boundaries(ref)
             except ValueError:
                 continue
+            # The template's RPN conditional-format range is M-only. If the
+            # user changes the RPN column, move that range to the new column.
+            if min_col == 13 and max_col == 13:
+                min_col = max_col = rpn_column
             # Rules covering template data should cover all merged rows. Rules
             # outside the data area (e.g. header rules) retain their location.
             if min_row >= data_start and max_row >= data_start:
@@ -446,10 +454,11 @@ def merge_pfmea(
     # AQ2 is a template formula, so its source range and percentage must be
     # recalculated for the rows that actually made it into this output.
     data_end = write_row - 1
-    _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end)
+    _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end, settings)
     _update_rpn_formula(
         out_ws, settings.data_start_row, data_end,
         max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
+        settings,
     )
     # Conditional-format rules refer to differential styles by dxfId. Since
     # the output workbook is created from scratch, copy that style table too;
@@ -461,6 +470,7 @@ def merge_pfmea(
         pass
     _copy_conditional_formatting(
         tpl_ws, out_ws, settings.data_start_row, data_end,
+        settings.rpn_column,
     )
 
     # ---- History sheet ---------------------------------------------------

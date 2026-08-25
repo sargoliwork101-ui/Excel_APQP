@@ -86,6 +86,19 @@ class SettingsDialog(QtWidgets.QDialog):
         self.name_col_edit.setMaxLength(3)
         self.name_col_edit.setFixedWidth(80)
 
+        self.failure_mode_col_edit = QtWidgets.QLineEdit()
+        self.failure_mode_col_edit.setMaxLength(3)
+        self.failure_mode_col_edit.setFixedWidth(80)
+        self.so_col_edit = QtWidgets.QLineEdit()
+        self.so_col_edit.setMaxLength(3)
+        self.so_col_edit.setFixedWidth(80)
+        self.rpn_col_edit = QtWidgets.QLineEdit()
+        self.rpn_col_edit.setMaxLength(3)
+        self.rpn_col_edit.setFixedWidth(80)
+        self.aq2_cell_edit = QtWidgets.QLineEdit()
+        self.aq2_cell_edit.setMaxLength(10)
+        self.aq2_cell_edit.setFixedWidth(100)
+
         self.sheet_edit = QtWidgets.QLineEdit()
         self.history_edit = QtWidgets.QLineEdit()
 
@@ -106,6 +119,10 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("failure_column_width_lbl"), self.failure_column_width_spin)
         form.addRow(self.tr_.t("opc_col_lbl"), self.opc_col_edit)
         form.addRow(self.tr_.t("name_col_lbl"), self.name_col_edit)
+        form.addRow(self.tr_.t("failure_mode_col_lbl"), self.failure_mode_col_edit)
+        form.addRow(self.tr_.t("so_col_lbl"), self.so_col_edit)
+        form.addRow(self.tr_.t("rpn_col_lbl"), self.rpn_col_edit)
+        form.addRow(self.tr_.t("aq2_cell_lbl"), self.aq2_cell_edit)
         form.addRow(self.tr_.t("footer_markers_lbl"), self.footer_edit)
 
         settings_tools = QtWidgets.QHBoxLayout()
@@ -129,7 +146,8 @@ class SettingsDialog(QtWidgets.QDialog):
         btns.rejected.connect(self.reject)
         outer.addWidget(btns)
 
-        self.resize(470, 520)
+        self.resize(560, 700)
+        self.setMinimumSize(520, 650)
 
     # ------------------------------------------------------------------
     def _load_values(self):
@@ -140,6 +158,10 @@ class SettingsDialog(QtWidgets.QDialog):
         self.failure_column_width_spin.setValue(self.merge_settings.failure_column_width)
         self.opc_col_edit.setText(_col_to_letter(self.merge_settings.opc_column))
         self.name_col_edit.setText(_col_to_letter(self.merge_settings.name_column))
+        self.failure_mode_col_edit.setText(_col_to_letter(self.merge_settings.failure_mode_column))
+        self.so_col_edit.setText(_col_to_letter(self.merge_settings.so_column))
+        self.rpn_col_edit.setText(_col_to_letter(self.merge_settings.rpn_column))
+        self.aq2_cell_edit.setText(self.merge_settings.aq2_cell)
         self.sheet_edit.setText(self.merge_settings.sheet_name)
         self.history_edit.setText(self.merge_settings.history_sheet)
         markers = self.merge_settings.footer_markers
@@ -169,6 +191,10 @@ class SettingsDialog(QtWidgets.QDialog):
         self.merge_settings.failure_column_width = self.failure_column_width_spin.value()
         self.merge_settings.opc_column = _letter_to_col(self.opc_col_edit.text())
         self.merge_settings.name_column = _letter_to_col(self.name_col_edit.text())
+        self.merge_settings.failure_mode_column = _letter_to_col(self.failure_mode_col_edit.text())
+        self.merge_settings.so_column = _letter_to_col(self.so_col_edit.text())
+        self.merge_settings.rpn_column = _letter_to_col(self.rpn_col_edit.text())
+        self.merge_settings.aq2_cell = self.aq2_cell_edit.text().strip().upper() or "AQ2"
         self.merge_settings.sheet_name = self.sheet_edit.text().strip() or "PFMEA"
         self.merge_settings.history_sheet = self.history_edit.text().strip() or "History"
         markers = [

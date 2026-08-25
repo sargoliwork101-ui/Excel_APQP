@@ -170,7 +170,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.restore_backup_btn = QtWidgets.QPushButton()
         self.restore_backup_btn.clicked.connect(self._restore_system)
 
-        self.settings_btn = QtWidgets.QPushButton("⚙")
+        self.settings_btn = QtWidgets.QPushButton()
+        self.settings_btn.setIcon(QtGui.QIcon(str(Path(__file__).parent / "assets" / "settings.svg")))
+        self.settings_btn.setIconSize(QtCore.QSize(20, 20))
         self.settings_btn.setFixedSize(38, 38)
         f = self.settings_btn.font(); f.setPointSize(14); self.settings_btn.setFont(f)
         self.settings_btn.setToolTip("Settings")
