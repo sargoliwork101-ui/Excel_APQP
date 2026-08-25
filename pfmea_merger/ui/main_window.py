@@ -104,6 +104,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._apply_language()
         self._restore_last()
         self._reload_profile_combo()
+        # Restore the last input folder automatically once per application
+        # start, so the user does not have to browse to it every time.
+        self._auto_load_last_folder()
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self):
@@ -435,6 +438,28 @@ class MainWindow(QtWidgets.QMainWindow):
             self._save_last()
 
     # ---------------------------------------------------- add files/folder
+    @staticmethod
+    def _xlsx_files_in_folder(folder: str) -> List[str]:
+        """Return supported Excel files in a folder in a stable order."""
+        root = Path(folder)
+        paths = [
+            p for pattern in ("*.xlsx", "*.xlsm")
+            for p in root.glob(pattern)
+            if not p.name.startswith("~$")
+        ]
+        return sorted({str(p) for p in paths}, key=lambda p: p.lower())
+
+    def _auto_load_last_folder(self):
+        """Load the remembered folder once, only when it still exists."""
+        folder = self.app_settings.last_input_dir.strip()
+        if not folder or not Path(folder).is_dir():
+            return
+        paths = self._xlsx_files_in_folder(folder)
+        if paths:
+            self._add_paths(paths)
+            self.status.showMessage("● " + self.tr_.t(
+                "restored_folder", folder=folder, n=len(paths)))
+
     def _add_files(self):
         start = self.app_settings.last_input_dir or str(Path.home())
         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
@@ -454,8 +479,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if folder:
             self.app_settings.last_input_dir = folder
             self.app_settings.save()
-            paths = sorted(str(p) for p in Path(folder).glob("*.xlsx")
-                           if not p.name.startswith("~$"))
+            paths = self._xlsx_files_in_folder(folder)
             if not paths:
                 QtWidgets.QMessageBox.information(
                     self, self.tr_.t("info"),

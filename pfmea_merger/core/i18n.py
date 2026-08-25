@@ -126,6 +126,10 @@ STRINGS = {
     "open_output": {"fa": "باز کردن خروجی", "en": "Open output"},
     "open_after": {"fa": "پس از تجمیع فایل را باز کن", "en": "Open output after merge"},
     "refreshed": {"fa": "به‌روزرسانی انجام شد.", "en": "Refreshed."},
+    "restored_folder": {
+        "fa": "پوشه آخر به‌صورت خودکار بارگذاری شد: {n} فایل",
+        "en": "Last folder restored automatically: {n} files",
+    },
     "clear_confirm": {
         "fa": "تمام فایل‌ها و ایستگاه‌های بارگذاری‌شده پاک شوند؟",
         "en": "Clear all loaded files and stations?",
