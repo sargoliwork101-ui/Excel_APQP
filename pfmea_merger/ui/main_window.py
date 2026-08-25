@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Tuple
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from ..core.config import AppSettings, MergeSettings, TEMPLATES_DIR, OUTPUT_DIR
+from ..core.config import AppSettings, MergeSettings, TEMPLATES_DIR, OUTPUT_DIR, APP_VERSION
 from ..core.i18n import Translator
 from ..core.excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook
 from ..core.excel_merger import merge_pfmea
@@ -183,6 +183,7 @@ class MainWindow(QtWidgets.QMainWindow):
         c1.setVerticalSpacing(8)
 
         self.template_label = QtWidgets.QLabel()
+        self.template_label.setObjectName("SectionLabel")
         self.template_edit = QtWidgets.QLineEdit()
         self.template_edit.setReadOnly(True)
         self.template_browse_btn = QtWidgets.QPushButton()
@@ -192,6 +193,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_edit.installEventFilter(self)
 
         self.profile_label = QtWidgets.QLabel()
+        self.profile_label.setObjectName("SectionLabel")
         self.profile_combo = QtWidgets.QComboBox()
         self.profile_combo.setMinimumWidth(180)
         self.profile_combo.currentIndexChanged.connect(self._on_profile_changed)
@@ -338,6 +340,7 @@ class MainWindow(QtWidgets.QMainWindow):
         c3.setVerticalSpacing(8)
 
         self.output_label = QtWidgets.QLabel()
+        self.output_label.setObjectName("SectionLabel")
         self.output_edit = QtWidgets.QLineEdit()
         self.output_browse_btn = QtWidgets.QPushButton()
         self.output_browse_btn.clicked.connect(self._pick_output)
@@ -1141,28 +1144,42 @@ class MainWindow(QtWidgets.QMainWindow):
     def _show_about(self):
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(self.tr_.t("about_title"))
-        dialog.setMinimumSize(480, 360)
+        dialog.setMinimumSize(520, 390)
         layout = QtWidgets.QVBoxLayout(dialog)
         title = QtWidgets.QLabel(self.tr_.t("app_title"))
         title.setObjectName("AppTitle")
+        title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         font = title.font(); font.setPointSize(16); font.setBold(True); title.setFont(font)
         layout.addWidget(title)
-        text = QtWidgets.QLabel(
-            "<b>تجمیع‌گر PFMEA برای فرآیند APQP</b><br><br>"
-            "این برنامه برای مدیریت فایل‌های PFMEA ایستگاه‌ها، انتخاب ایستگاه‌ها "
-            "و ساخت خروجی نهایی در قالب Template طراحی شده است.<br><br>"
-            "<b>طراحی و توسعه:</b> حامد سرگلی<br>"
-            "<b>تلفن:</b> 09126368924<br>"
-            "<b>ایمیل:</b> <a href=\"mailto:hamed.sargoli@gmail.com\">hamed.sargoli@gmail.com</a><br><br>"
-            "نسخه برنامه: PFMEA Merger"
-        )
+        if self.tr_.is_rtl():
+            html = (
+                "<div align=\"center\"><b>تجمیع‌گر PFMEA برای فرآیند APQP</b><br><br>"
+                "این برنامه برای مدیریت فایل‌های PFMEA ایستگاه‌ها، انتخاب ایستگاه‌ها و ساخت "
+                "خروجی نهایی در قالب Template طراحی شده است.<br><br>"
+                "<b>طراحی و توسعه:</b> حامد سرگلی<br>"
+                "<b>تلفن:</b> 09126368924<br>"
+                "<b>ایمیل:</b> <a href=\"mailto:hamed.sargoli@gmail.com\">hamed.sargoli@gmail.com</a><br><br>"
+                f"<b>نسخه برنامه:</b> {APP_VERSION}</div>"
+            )
+        else:
+            html = (
+                "<div align=\"center\"><b>PFMEA Merger for APQP</b><br><br>"
+                "A desktop tool for managing station PFMEA files and creating a final "
+                "Template-based workbook.<br><br>"
+                "<b>Developed by:</b> Hamed Sargoli<br>"
+                "<b>Phone:</b> 09126368924<br>"
+                "<b>Email:</b> <a href=\"mailto:hamed.sargoli@gmail.com\">hamed.sargoli@gmail.com</a><br><br>"
+                f"<b>Version:</b> {APP_VERSION}</div>"
+            )
+        text = QtWidgets.QLabel(html)
         text.setTextFormat(QtCore.Qt.TextFormat.RichText)
         text.setOpenExternalLinks(True)
         text.setWordWrap(True)
+        text.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(text, 1)
         close = QtWidgets.QPushButton(self.tr_.t("ok"))
         close.clicked.connect(dialog.accept)
-        layout.addWidget(close, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(close, 0, QtCore.Qt.AlignmentFlag.AlignCenter)
         dialog.exec()
 
     # ---------------------------------------------------------- settings

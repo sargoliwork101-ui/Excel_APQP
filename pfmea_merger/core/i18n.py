@@ -134,7 +134,7 @@ STRINGS = {
     "processing": {"fa": "در حال پردازش...", "en": "Processing..."},
 
     # ---- new keys
-    "remove_selected": {"fa": "حذف انتخاب‌شده", "en": "Remove Selected"},
+    "remove_selected": {"fa": "حذف ردیف انتخاب‌شده", "en": "Remove Selected Row"},
     "invert": {"fa": "معکوس", "en": "Invert"},
     "move_top": {"fa": "بالاترین", "en": "Move to top"},
     "move_bottom": {"fa": "پایین‌ترین", "en": "Move to bottom"},

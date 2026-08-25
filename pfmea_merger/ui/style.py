@@ -100,6 +100,11 @@ QLabel#AppTitle {{
     letter-spacing: 0.3px;
 }}
 
+QLabel#SectionLabel {{
+    color: #e5edff;
+    font-weight: 700;
+}}
+
 QToolTip {{
     background: {BG_ELEV2};
     color: {TEXT};
@@ -157,6 +162,7 @@ QComboBox QAbstractItemView {{
 /* ----- Buttons ----- */
 QPushButton {{
     background: {BG_ELEV2};
+    font-weight: 600;
     color: {TEXT};
     border: 1px solid {BORDER};
     border-radius: 9px;
