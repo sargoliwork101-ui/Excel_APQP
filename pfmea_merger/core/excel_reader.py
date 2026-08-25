@@ -29,6 +29,7 @@ class StationBlock:
     end_row: int
     source_file: str = ""
     order_index: int = 0
+    failure_modes: List[str] = field(default_factory=list)
 
     @property
     def row_count(self) -> int:
@@ -38,6 +39,10 @@ class StationBlock:
     def display_label(self) -> str:
         code = str(self.opc_code) if self.opc_code is not None else ""
         return f"{code} - {self.name}".strip(" -")
+
+    @property
+    def failure_mode_text(self) -> str:
+        return "\n".join(self.failure_modes)
 
 
 @dataclass
@@ -131,12 +136,18 @@ def _find_stations(ws, settings: MergeSettings, data_end_row: int) -> List[Stati
     stations: List[StationBlock] = []
     for i, (start_row, opc, name) in enumerate(starts):
         end_row = (starts[i + 1][0] - 1) if i + 1 < len(starts) else data_end_row
+        failure_modes = []
+        for failure_row in range(start_row, end_row + 1):
+            mode = _cell_str(ws.cell(row=failure_row, column=3).value)
+            if mode and mode not in failure_modes:
+                failure_modes.append(mode)
         stations.append(StationBlock(
             opc_code=opc,
             name=name,
             start_row=start_row,
             end_row=end_row,
             order_index=i,
+            failure_modes=failure_modes,
         ))
     return stations
 

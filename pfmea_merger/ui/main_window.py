@@ -231,9 +231,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(self.COL_ORDER, 60)
         self.table.setColumnWidth(self.COL_OPC,   90)
         self.table.setColumnWidth(self.COL_NAME,  280)
-        self.table.setColumnWidth(self.COL_ROWS,  75)
+        self.table.setColumnWidth(self.COL_ROWS,  290)
         self.table.verticalHeader().setDefaultSectionSize(38)
-        self.table.setWordWrap(False)
+        self.table.setWordWrap(True)
         self.table.itemChanged.connect(self._on_table_item_changed)
         # The whole USE cell is clickable (not only the native checkbox).
         self.table.cellClicked.connect(self._on_use_cell_clicked)
@@ -604,9 +604,10 @@ class MainWindow(QtWidgets.QMainWindow):
             name_item.setToolTip(str(r.block.name).strip())
             self.table.setItem(i, self.COL_NAME, name_item)
 
-            rows_item = QtWidgets.QTableWidgetItem(str(r.block.row_count))
-            rows_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            rows_item.setForeground(QtGui.QColor("#aebdd3"))
+            failure_text = r.block.failure_mode_text or "—"
+            rows_item = QtWidgets.QTableWidgetItem(failure_text)
+            rows_item.setToolTip(failure_text)
+            rows_item.setForeground(QtGui.QColor("#c6d4e9"))
             self.table.setItem(i, self.COL_ROWS, rows_item)
 
             file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)

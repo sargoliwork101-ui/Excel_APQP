@@ -30,15 +30,29 @@ from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last
 # ---------------------------------------------------------------------------
 # helpers to copy formatting
 
-def _copy_cell(src_cell, dst_cell) -> None:
-    """Copy value + style + hyperlink with IDs remapped to the output book.
-
-    A complete ``_style`` assignment is tempting but unsafe here: style IDs
-    belong to the source workbook's font/fill/alignment tables. Assigning the
-    public components lets openpyxl register equivalent styles in the output
-    workbook and prevents corrupt files and IndexError on save.
-    """
-    dst_cell.value = src_cell.value
+def _copy_cell(src_cell, dst_cell, row_offset: int = 0) -> None:
+    """Copy a cell while remapping styles and relative formula references."""
+    value = src_cell.value
+    # Source station blocks are moved to a new row. Relative formulas (RPN,
+    # SO, etc.) must follow them; copying the raw text would make every block
+    # refer back to the source row numbers and produce incorrect PFMEA data.
+    try:
+        from openpyxl.formula.translate import Translator
+        if isinstance(value, str) and value.startswith("=") and row_offset:
+            value = Translator(value, origin=src_cell.coordinate).translate_formula(
+                dst_cell.coordinate)
+        elif hasattr(value, "text") and row_offset:
+            # Preserve Excel array formulas while shifting their references.
+            from openpyxl.worksheet.formula import ArrayFormula
+            text = Translator(value.text, origin=src_cell.coordinate).translate_formula(
+                dst_cell.coordinate)
+            ref = getattr(value, "ref", dst_cell.coordinate)
+            ref = re.sub(r"(\$?[A-Z]{1,3}\$?)(\d+)",
+                         lambda m: f"{m.group(1)}{int(m.group(2)) + row_offset}", ref)
+            value = ArrayFormula(ref=ref, text=text)
+    except Exception:
+        pass
+    dst_cell.value = value
     if src_cell.has_style:
         dst_cell.font = copy(src_cell.font)
         dst_cell.fill = copy(src_cell.fill)
@@ -106,7 +120,7 @@ def _copy_row_range(
                 dst_row_dim.outlineLevel = src_row_dim.outlineLevel
         for c in range(1, max_col + 1):
             _copy_cell(src_ws.cell(row=r, column=c),
-                       dst_ws.cell(row=dst_row, column=c))
+                       dst_ws.cell(row=dst_row, column=c), row_offset=offset)
 
     # merged cells: keep any range whose bounds overlap [src_start..src_end]
     # and clip them into the destination range.
