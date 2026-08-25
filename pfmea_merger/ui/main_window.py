@@ -160,6 +160,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lang_btn.setToolTip("Toggle Language / تغییر زبان")
         self.lang_btn.clicked.connect(self._toggle_language)
 
+        self.about_btn = QtWidgets.QPushButton()
+        self.about_btn.setFixedHeight(36)
+        self.about_btn.clicked.connect(self._show_about)
+
         self.settings_btn = QtWidgets.QPushButton("⚙")
         self.settings_btn.setFixedSize(38, 38)
         f = self.settings_btn.font(); f.setPointSize(14); self.settings_btn.setFont(f)
@@ -167,6 +171,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings_btn.clicked.connect(self._open_settings)
 
         title_bar.addWidget(self.lang_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+        title_bar.addWidget(self.about_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         title_bar.addWidget(self.settings_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         root.addLayout(title_bar)
 
@@ -392,6 +397,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else "PFMEA template + station files → one merged output"
         )
         self.lang_btn.setText("🌐 " + ("EN" if self.tr_.is_rtl() else "فا"))
+        self.about_btn.setText("ℹ " + t("about"))
         self.template_label.setText(t("template_label"))
         self.template_open_btn.setText("📖 " + t("open_template"))
         self.template_browse_btn.setText("📂 " + t("browse"))
@@ -834,15 +840,32 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.count_label.setText(f"Selected: {selected} / {total}")
 
+    def _set_missing_row_background(self, row_index: int, alert: bool):
+        for col in range(self.table.columnCount()):
+            item = self.table.item(row_index, col)
+            if item is None:
+                continue
+            if alert:
+                item.setBackground(QtGui.QColor("#713331"))
+                item.setForeground(QtGui.QColor("#ffe0c2"))
+            elif col == self.COL_OPC:
+                item.setBackground(QtGui.QColor("#1d3855"))
+                item.setForeground(QtGui.QColor("#59d6df"))
+            elif col == self.COL_ROWS:
+                item.setBackground(QtGui.QColor("#422331"))
+                item.setForeground(QtGui.QColor("#e58a9c"))
+            elif col == self.COL_FILE:
+                item.setBackground(QtGui.QColor("#4a2928"))
+                item.setForeground(QtGui.QColor("#ff9a65"))
+            else:
+                item.setBackground(QtGui.QBrush())
+                item.setForeground(QtGui.QColor("#eef4ff"))
+
     def _blink_missing_rows(self):
         self._blink_on = not self._blink_on
         for i, row in enumerate(self.rows):
-            if str(row.block.opc_code) not in self._missing_opcs:
-                continue
-            item = self.table.item(i, self.COL_FILE)
-            if item is not None:
-                item.setBackground(QtGui.QColor("#713331" if self._blink_on else "#4a2928"))
-                item.setForeground(QtGui.QColor("#ffd0a8" if self._blink_on else "#ff9a65"))
+            if str(row.block.opc_code) in self._missing_opcs:
+                self._set_missing_row_background(i, self._blink_on)
 
     def _set_all(self, checked: bool):
         for r in self.rows:
@@ -1114,6 +1137,33 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         pm.delete_profile(name)
         self._reload_profile_combo()
+
+    def _show_about(self):
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(self.tr_.t("about_title"))
+        dialog.setMinimumSize(480, 360)
+        layout = QtWidgets.QVBoxLayout(dialog)
+        title = QtWidgets.QLabel(self.tr_.t("app_title"))
+        title.setObjectName("AppTitle")
+        font = title.font(); font.setPointSize(16); font.setBold(True); title.setFont(font)
+        layout.addWidget(title)
+        text = QtWidgets.QLabel(
+            "<b>تجمیع‌گر PFMEA برای فرآیند APQP</b><br><br>"
+            "این برنامه برای مدیریت فایل‌های PFMEA ایستگاه‌ها، انتخاب ایستگاه‌ها "
+            "و ساخت خروجی نهایی در قالب Template طراحی شده است.<br><br>"
+            "<b>طراحی و توسعه:</b> حامد سرگلی<br>"
+            "<b>تلفن:</b> 09126368924<br>"
+            "<b>ایمیل:</b> <a href=\"mailto:hamed.sargoli@gmail.com\">hamed.sargoli@gmail.com</a><br><br>"
+            "نسخه برنامه: PFMEA Merger"
+        )
+        text.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        text.setOpenExternalLinks(True)
+        text.setWordWrap(True)
+        layout.addWidget(text, 1)
+        close = QtWidgets.QPushButton(self.tr_("ok"))
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
+        dialog.exec()
 
     # ---------------------------------------------------------- settings
     def _open_settings(self):

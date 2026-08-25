@@ -12,6 +12,8 @@ STRINGS = {
     "template_label": {"fa": "فایل قالب:", "en": "Template File:"},
     "browse": {"fa": "انتخاب...", "en": "Browse..."},
     "open_template": {"fa": "باز کردن", "en": "Open"},
+    "about": {"fa": "درباره ما", "en": "About"},
+    "about_title": {"fa": "درباره برنامه", "en": "About"},
     "save_settings": {"fa": "ذخیره تنظیمات", "en": "Save settings"},
     "restore_settings": {"fa": "بازیابی تنظیمات", "en": "Restore settings"},
     "add_files": {"fa": "افزودن فایل‌ها", "en": "Add Files"},
