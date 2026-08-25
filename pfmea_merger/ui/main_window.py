@@ -3,6 +3,7 @@ Main window for the PFMEA Merger app (dark themed).
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -107,6 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._suspend_checks = False
         self._profile_change_guard = False
         self._active_profile_name = ""
+        self._profile_snapshot = ""
         self._row_heights: Dict[str, int] = {}
         self._layout_sync = False
 
@@ -888,6 +890,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._active_profile_name = self.profile_combo.currentText().strip()
         self.profile_combo.blockSignals(False)
 
+    def _current_profile_signature(self) -> str:
+        state = {
+            "template": self.template_edit.text(),
+            "settings": self.merge_settings.to_dict(),
+            "row_heights": self._row_heights,
+            "stations": [
+                {"opc": str(r.block.opc_code), "enabled": r.enabled}
+                for r in self.rows
+            ],
+        }
+        return json.dumps(state, ensure_ascii=False, sort_keys=True, default=str)
+
     def _on_profile_changed(self, _idx: int):
         if self._profile_change_guard:
             return
@@ -895,7 +909,7 @@ class MainWindow(QtWidgets.QMainWindow):
         old_name = self._active_profile_name
         if new_name == old_name:
             return
-        if old_name and self.rows:
+        if old_name and self.rows and self._current_profile_signature() != self._profile_snapshot:
             answer = QtWidgets.QMessageBox.question(
                 self, self.tr_.t("confirm"),
                 self.tr_.t("save_profile_before_switch", name=old_name),
@@ -931,6 +945,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if profile.stations and self.rows:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()
+        self._profile_snapshot = self._current_profile_signature()
         self.status.showMessage("● " + self.tr_.t("profile_loaded", name=name))
         return True
 
@@ -950,6 +965,7 @@ class MainWindow(QtWidgets.QMainWindow):
             template_path=self.template_edit.text(), stations=stations,
             row_heights=dict(self._row_heights), settings=self.merge_settings,
         ))
+        self._profile_snapshot = self._current_profile_signature()
 
     def _on_load_profile(self):
         name = self.profile_combo.currentText().strip()
@@ -1019,6 +1035,7 @@ class MainWindow(QtWidgets.QMainWindow):
             settings=self.merge_settings,
         )
         pm.save_profile(profile)
+        self._profile_snapshot = self._current_profile_signature()
         self._reload_profile_combo()
         self._profile_change_guard = True
         idx = self.profile_combo.findText(name)
@@ -1045,14 +1062,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ---------------------------------------------------------- settings
     def _open_settings(self):
-        dlg = SettingsDialog(self, self.tr_, self.merge_settings, self.app_settings)
-        if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-            self.merge_settings, self.app_settings = dlg.apply_to()
-            self.app_settings.save()
-            self.tr_.set_lang(self.app_settings.language)
-            self._apply_language()
-            # re-parse files with new settings
-            self._refresh_all()
+        try:
+            dlg = SettingsDialog(self, self.tr_, self.merge_settings, self.app_settings)
+            if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+                self.merge_settings, self.app_settings = dlg.apply_to()
+                self.app_settings.saved_merge_settings = self.merge_settings.to_dict()
+                self.app_settings.save()
+                self.tr_.set_lang(self.app_settings.language)
+                self._apply_language()
+                # re-parse files with new settings
+                self._refresh_all()
+        except Exception as exc:
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            box.setWindowTitle(self.tr_.t("error"))
+            box.setText(str(exc))
+            box.setDetailedText(traceback.format_exc())
+            box.exec()
 
     # ------------------------------------------------------------- merge
     def _on_all_profiles_toggled(self, state: int):
