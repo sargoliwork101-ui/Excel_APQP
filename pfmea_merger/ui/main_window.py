@@ -1377,50 +1377,47 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _build_cp_tab(self):
         page = QtWidgets.QWidget(); layout = QtWidgets.QVBoxLayout(page)
-        layout.setContentsMargins(24, 24, 24, 24); layout.setSpacing(16)
-        title = QtWidgets.QLabel("Control Plan Merger")
-        title.setObjectName("SectionLabel"); layout.addWidget(title)
-        hint = QtWidgets.QLabel("فایل‌های CP ایستگاه‌ها را انتخاب کنید و خروجی مستقل بسازید")
-        hint.setProperty("muted", True); layout.addWidget(hint)
-        form = QtWidgets.QFormLayout(); form.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18); layout.setSpacing(10)
+        title = QtWidgets.QLabel("Control Plan Merger"); title.setObjectName("SectionLabel"); layout.addWidget(title)
+        top = QtWidgets.QGridLayout(); top.setSpacing(8)
         self.cp_template_edit = QtWidgets.QLineEdit(); self.cp_template_edit.setReadOnly(True)
-        b = QtWidgets.QPushButton("انتخاب Template CP")
-        b.clicked.connect(self._pick_cp_template)
-        row = QtWidgets.QHBoxLayout(); row.addWidget(self.cp_template_edit); row.addWidget(b)
-        form.addRow("Template CP:", row)
-        self.cp_folder_edit = QtWidgets.QLineEdit(); self.cp_folder_edit.setReadOnly(True)
-        b2 = QtWidgets.QPushButton("انتخاب پوشه فایل‌ها")
-        b2.clicked.connect(self._pick_cp_folder)
-        row2 = QtWidgets.QHBoxLayout(); row2.addWidget(self.cp_folder_edit); row2.addWidget(b2)
-        form.addRow("پوشه فایل‌های CP:", row2)
+        bt = QtWidgets.QPushButton("انتخاب Template CP"); bt.clicked.connect(self._pick_cp_template)
+        top.addWidget(QtWidgets.QLabel("Template CP:"),0,0); top.addWidget(self.cp_template_edit,0,1); top.addWidget(bt,0,2)
         self.cp_output_edit = QtWidgets.QLineEdit(str(OUTPUT_DIR / "Merged_CP.xlsx"))
-        form.addRow("خروجی:", self.cp_output_edit)
-        layout.addLayout(form)
-        self.cp_merge_btn = QtWidgets.QPushButton("ساخت خروجی CP")
-        self.cp_merge_btn.setProperty("primary", True); self.cp_merge_btn.clicked.connect(self._do_cp_merge)
-        layout.addWidget(self.cp_merge_btn); layout.addStretch(1)
+        top.addWidget(QtWidgets.QLabel("خروجی:"),1,0); top.addWidget(self.cp_output_edit,1,1,1,2)
+        layout.addLayout(top)
+        tools=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
+        self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(lambda: [self.cp_files.takeItem(i) for i in reversed(range(self.cp_files.count())) if self.cp_files.item(i).isSelected()]); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
+        for x in (self.cp_add_btn,self.cp_folder_btn): tools.addWidget(x)
+        tools.addStretch(1); tools.addWidget(self.cp_remove_btn); tools.addWidget(self.cp_clear_btn); layout.addLayout(tools)
+        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); layout.addWidget(self.cp_files,1)
+        self.cp_merge_btn=QtWidgets.QPushButton("ساخت خروجی CP"); self.cp_merge_btn.setProperty("primary",True); self.cp_merge_btn.clicked.connect(self._do_cp_merge); layout.addWidget(self.cp_merge_btn)
         return page
 
     def _pick_cp_template(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Template CP", str(TEMPLATES_DIR), "Excel (*.xlsx *.xlsm)")
+        path,_=QtWidgets.QFileDialog.getOpenFileName(self,"Template CP",str(TEMPLATES_DIR),"Excel (*.xlsx *.xlsm)")
         if path: self.cp_template_edit.setText(path)
 
-    def _pick_cp_folder(self):
-        path = QtWidgets.QFileDialog.getExistingDirectory(self, "پوشه فایل‌های CP")
-        if path: self.cp_folder_edit.setText(path)
+    def _cp_add_files(self):
+        paths,_=QtWidgets.QFileDialog.getOpenFileNames(self,"فایل‌های CP","","Excel (*.xlsx *.xlsm)")
+        for path in paths:
+            if not any(self.cp_files.item(i).text()==path for i in range(self.cp_files.count())): self.cp_files.addItem(path)
+
+    def _cp_add_folder(self):
+        folder=QtWidgets.QFileDialog.getExistingDirectory(self,"پوشه فایل‌های CP")
+        if folder:
+            for path in sorted(Path(folder).glob("*.xlsx")):
+                if not any(self.cp_files.item(i).text()==str(path) for i in range(self.cp_files.count())): self.cp_files.addItem(str(path))
 
     def _do_cp_merge(self):
-        template = self.cp_template_edit.text().strip(); folder = self.cp_folder_edit.text().strip()
-        if not template or not folder:
-            QtWidgets.QMessageBox.warning(self, "CP", "Template CP و پوشه فایل‌ها را انتخاب کنید."); return
-        files = sorted(str(p) for p in Path(folder).glob("*.xlsx"))
-        if not files:
-            QtWidgets.QMessageBox.warning(self, "CP", "فایل CP در پوشه پیدا نشد."); return
-        output = self.cp_output_edit.text().strip() or str(OUTPUT_DIR / "Merged_CP.xlsx")
+        template=self.cp_template_edit.text().strip(); files=[self.cp_files.item(i).text() for i in range(self.cp_files.count())]
+        if not template or not files:
+            QtWidgets.QMessageBox.warning(self,"CP","Template و حداقل یک فایل CP را انتخاب کنید."); return
+        output=self.cp_output_edit.text().strip() or str(OUTPUT_DIR/"Merged_CP.xlsx")
         try:
-            merge_cp(template, files, output); self._last_output = output
-            QtWidgets.QMessageBox.information(self, "CP", f"خروجی ساخته شد:\n{output}")
-        except Exception as exc: QtWidgets.QMessageBox.critical(self, "CP", str(exc))
+            merge_cp(template,files,output); self._last_output=output
+            QtWidgets.QMessageBox.information(self,"CP",f"خروجی ساخته شد:\n{output}")
+        except Exception as exc: QtWidgets.QMessageBox.critical(self,"CP",str(exc))
 
     def _on_progress(self, pct: int, msg: str):
         self.progress.setValue(pct)
