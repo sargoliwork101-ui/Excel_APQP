@@ -606,8 +606,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
             failure_text = r.block.failure_mode_text or "—"
             rows_item = QtWidgets.QTableWidgetItem(failure_text)
-            rows_item.setToolTip(failure_text)
-            rows_item.setForeground(QtGui.QColor("#c6d4e9"))
+            rows_item.setToolTip(
+                f"C{r.block.start_row}: {failure_text}"
+            )
+            rows_item.setForeground(QtGui.QColor("#d8e7f7"))
+            rows_item.setBackground(QtGui.QColor("#19334a"))
+            rows_item.setTextAlignment(
+                QtCore.Qt.AlignmentFlag.AlignLeft
+                | QtCore.Qt.AlignmentFlag.AlignVCenter
+            )
             self.table.setItem(i, self.COL_ROWS, rows_item)
 
             file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)

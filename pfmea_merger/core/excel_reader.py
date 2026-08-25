@@ -136,11 +136,11 @@ def _find_stations(ws, settings: MergeSettings, data_end_row: int) -> List[Stati
     stations: List[StationBlock] = []
     for i, (start_row, opc, name) in enumerate(starts):
         end_row = (starts[i + 1][0] - 1) if i + 1 < len(starts) else data_end_row
-        failure_modes = []
-        for failure_row in range(start_row, end_row + 1):
-            mode = _cell_str(ws.cell(row=failure_row, column=3).value)
-            if mode and mode not in failure_modes:
-                failure_modes.append(mode)
+        # The UI must show the failure-mode cell belonging to the station
+        # itself, not collect text from other rows or other sections. In the
+        # standard PFMEA template this is column C on the station's first row.
+        failure_value = _cell_str(ws.cell(row=start_row, column=3).value)
+        failure_modes = [failure_value] if failure_value else []
         stations.append(StationBlock(
             opc_code=opc,
             name=name,
