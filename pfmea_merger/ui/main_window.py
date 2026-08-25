@@ -17,6 +17,7 @@ from ..core.config import AppSettings, MergeSettings, TEMPLATES_DIR, OUTPUT_DIR,
 from ..core.i18n import Translator
 from ..core.excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook
 from ..core.excel_merger import merge_pfmea
+from ..core.cp_merger import merge_cp
 from ..core import profile_manager as pm
 from ..core import backup_manager
 from .settings_dialog import SettingsDialog
@@ -367,6 +368,9 @@ class MainWindow(QtWidgets.QMainWindow):
         f = self.merge_btn.font(); f.setPointSize(11); f.setBold(True); self.merge_btn.setFont(f)
         self.merge_btn.clicked.connect(self._do_merge)
 
+        self.cp_merge_btn = QtWidgets.QPushButton("ساخت خروجی CP / Build CP")
+        self.cp_merge_btn.clicked.connect(self._do_cp_merge)
+
         self.open_output_btn = QtWidgets.QPushButton()
         self.open_output_btn.setEnabled(False)
         self.open_output_btn.clicked.connect(self._open_last_output)
@@ -375,6 +379,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress.setValue(0)
         self.progress.setTextVisible(True)
 
+        c3.addWidget(self.cp_merge_btn,         1, 0, 1, 2)
         c3.addWidget(self.output_label,        0, 0)
         c3.addWidget(self.output_edit,         0, 1, 1, 3)
         c3.addWidget(self.output_browse_btn,   0, 4)
@@ -1371,6 +1376,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.finished_ok.connect(self._on_finished)
         self._worker.failed.connect(self._on_failed)
         self._worker.start()
+
+    def _do_cp_merge(self):
+        """Build a CP output independently, without mixing it with PFMEA."""
+        template, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "انتخاب Template CP / Select CP template", str(TEMPLATES_DIR),
+            "Excel (*.xlsx *.xlsm)")
+        if not template: return
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            self, "انتخاب پوشه فایل‌های CP / Select CP folder")
+        if not folder: return
+        files = sorted(str(p) for p in Path(folder).glob("*.xlsx"))
+        if not files:
+            QtWidgets.QMessageBox.warning(self, self.tr_.t("warning"), "فایل CP در پوشه پیدا نشد")
+            return
+        output = str(Path(self.output_edit.text().strip() or (OUTPUT_DIR / "Merged_CP.xlsx")))
+        output = str(Path(output).with_name("Merged_CP.xlsx"))
+        if Path(output).exists() and QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"), self.tr_.t("overwrite_output", path=output)) != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        try:
+            merge_cp(template, files, output)
+            self._last_output = output
+            self.open_output_btn.setEnabled(True)
+            QtWidgets.QMessageBox.information(self, "CP", f"خروجی CP ساخته شد:\n{output}")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, self.tr_.t("error"), str(exc))
 
     def _on_progress(self, pct: int, msg: str):
         self.progress.setValue(pct)
