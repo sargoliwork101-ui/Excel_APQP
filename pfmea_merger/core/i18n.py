@@ -11,6 +11,9 @@ STRINGS = {
     # ---- top toolbar
     "template_label": {"fa": "فایل قالب:", "en": "Template File:"},
     "browse": {"fa": "انتخاب...", "en": "Browse..."},
+    "open_template": {"fa": "باز کردن", "en": "Open"},
+    "save_settings": {"fa": "ذخیره تنظیمات", "en": "Save settings"},
+    "restore_settings": {"fa": "بازیابی تنظیمات", "en": "Restore settings"},
     "add_files": {"fa": "افزودن فایل‌ها", "en": "Add Files"},
     "add_folder": {"fa": "افزودن پوشه", "en": "Add Folder"},
     "clear": {"fa": "پاک کردن", "en": "Clear"},

@@ -69,6 +69,7 @@ class AppSettings:
     last_input_dir: str = ""
     last_output_dir: str = ""
     last_profile: str = ""
+    saved_merge_settings: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "AppSettings":

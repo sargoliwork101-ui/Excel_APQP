@@ -108,6 +108,16 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("name_col_lbl"), self.name_col_edit)
         form.addRow(self.tr_.t("footer_markers_lbl"), self.footer_edit)
 
+        settings_tools = QtWidgets.QHBoxLayout()
+        self.save_defaults_btn = QtWidgets.QPushButton(self.tr_.t("save_settings"))
+        self.restore_defaults_btn = QtWidgets.QPushButton(self.tr_.t("restore_settings"))
+        settings_tools.addWidget(self.save_defaults_btn)
+        settings_tools.addWidget(self.restore_defaults_btn)
+        settings_tools.addStretch(1)
+        outer.addLayout(settings_tools)
+        self.save_defaults_btn.clicked.connect(self._save_defaults)
+        self.restore_defaults_btn.clicked.connect(self._restore_defaults)
+
         btns = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok
             | QtWidgets.QDialogButtonBox.StandardButton.Cancel
@@ -136,6 +146,17 @@ class SettingsDialog(QtWidgets.QDialog):
         idx = self.lang_combo.findData(self.app_settings.language)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
+
+    def _save_defaults(self):
+        self.apply_to()
+        self.app_settings.saved_merge_settings = self.merge_settings.to_dict()
+        self.app_settings.save()
+
+    def _restore_defaults(self):
+        saved = self.app_settings.saved_merge_settings
+        if saved:
+            self.merge_settings = MergeSettings.from_dict(saved)
+            self._load_values()
 
     def apply_to(self) -> tuple[MergeSettings, AppSettings]:
         self.merge_settings.header_rows = self.header_rows_spin.value()

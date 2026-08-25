@@ -94,7 +94,9 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setAcceptDrops(True)
         self.app_settings = AppSettings.load()
-        self.merge_settings = MergeSettings()
+        self.merge_settings = MergeSettings.from_dict(
+            self.app_settings.saved_merge_settings
+        )
         self.tr_ = Translator(self.app_settings.language)
 
         # file_path -> WorkbookAnalysis (for product info, etc.)
@@ -105,6 +107,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._suspend_checks = False
         self._profile_change_guard = False
         self._active_profile_name = ""
+        self._row_heights: Dict[str, int] = {}
+        self._layout_sync = False
 
         self._worker: Optional[MergeWorker] = None
         self._last_output: str = ""
@@ -169,7 +173,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_edit = QtWidgets.QLineEdit()
         self.template_edit.setReadOnly(True)
         self.template_browse_btn = QtWidgets.QPushButton()
+        self.template_open_btn = QtWidgets.QPushButton()
         self.template_browse_btn.clicked.connect(self._pick_template)
+        self.template_open_btn.clicked.connect(self._open_template)
+        self.template_edit.installEventFilter(self)
 
         self.profile_label = QtWidgets.QLabel()
         self.profile_combo = QtWidgets.QComboBox()
@@ -185,12 +192,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         c1.addWidget(self.template_label,       0, 0)
         c1.addWidget(self.template_edit,        0, 1, 1, 4)
-        c1.addWidget(self.template_browse_btn,  0, 5)
+        c1.addWidget(self.template_open_btn,    0, 5)
+        c1.addWidget(self.template_browse_btn,  0, 6)
         c1.addWidget(self.profile_label,        1, 0)
         c1.addWidget(self.profile_combo,        1, 1, 1, 2)
         c1.addWidget(self.profile_load_btn,     1, 3)
         c1.addWidget(self.profile_save_btn,     1, 4)
-        c1.addWidget(self.profile_delete_btn,   1, 5)
+        c1.addWidget(self.profile_delete_btn,   1, 5, 1, 2)
         c1.setColumnStretch(1, 1)
         c1.setColumnStretch(2, 1)
         root.addWidget(card1)
@@ -234,6 +242,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QHeaderView.ResizeMode.Interactive
         )
         self.table.verticalHeader().setMinimumSectionSize(28)
+        self.table.verticalHeader().sectionResized.connect(self._on_row_resized)
+        self.table.horizontalHeader().sectionResized.connect(self._on_column_resized)
         self.table.setAlternatingRowColors(True)
         # A clean, spaced table reads more like a modern list than a raw
         # spreadsheet while retaining row selection and keyboard support.
@@ -374,6 +384,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.lang_btn.setText("🌐 " + ("EN" if self.tr_.is_rtl() else "فا"))
         self.template_label.setText(t("template_label"))
+        self.template_open_btn.setText("📖 " + t("open_template"))
         self.template_browse_btn.setText("📂 " + t("browse"))
         self.profile_label.setText(t("profile_label"))
         self.profile_load_btn.setText("↩ " + t("load_profile"))
@@ -435,6 +446,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.app_settings.save()
 
     # ---------------------------------------------------- template pick
+    def _open_template(self):
+        path = self.template_edit.text().strip()
+        if path and Path(path).exists():
+            self._open_file(path)
+        else:
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_.t("warning"),
+                self.tr_.t("template_missing", path=path or "—"),
+            )
+
+    def eventFilter(self, watched, event):
+        if watched is getattr(self, "template_edit", None):
+            if event.type() == QtCore.QEvent.Type.MouseButtonDblClick:
+                self._open_template()
+                return True
+        return super().eventFilter(watched, event)
+
     def _pick_template(self):
         start = self.template_edit.text() or str(TEMPLATES_DIR)
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -616,6 +644,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.rows.sort(key=lambda r: order_map.get(str(r.block.opc_code), 10_000))
 
     def _rebuild_table(self):
+        self._layout_sync = True
         self._suspend_checks = True
         self.table.blockSignals(True)
         self.table.setRowCount(len(self.rows))
@@ -690,7 +719,10 @@ class MainWindow(QtWidgets.QMainWindow):
             # one unusually large file from making the whole table unusable.
             mode_count = len(r.block.failure_modes)
             manual_height = int(getattr(self.merge_settings, "failure_row_height", 0))
-            if manual_height > 0:
+            saved_height = self._row_heights.get(str(r.block.opc_code), 0)
+            if saved_height > 0:
+                row_height = saved_height
+            elif manual_height > 0:
                 row_height = manual_height
             else:
                 # Estimate wrapped lines using the current failure-mode
@@ -710,7 +742,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.table.setItem(i, self.COL_FILE, file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
+        self._layout_sync = False
         self._update_counts()
+
+    def _on_row_resized(self, row: int, _old_size: int, new_size: int):
+        if self._layout_sync or not (0 <= row < len(self.rows)):
+            return
+        self._row_heights[str(self.rows[row].block.opc_code)] = max(28, int(new_size))
+
+    def _on_column_resized(self, section: int, _old_size: int, new_size: int):
+        if not self._layout_sync and section == self.COL_ROWS:
+            self.merge_settings.failure_column_width = max(180, int(new_size))
 
     def _on_table_item_changed(self, item: QtWidgets.QTableWidgetItem):
         # Kept for compatibility with older table items/profiles. Current USE
@@ -884,6 +926,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.template_edit.setText(profile.template_path)
         if profile.settings:
             self.merge_settings = profile.settings
+        self._row_heights = dict(profile.row_heights)
         if profile.stations and self.rows:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()
@@ -904,7 +947,7 @@ class MainWindow(QtWidgets.QMainWindow):
         pm.save_profile(pm.ProductProfile(
             name=name, product_name=product_name, product_code=product_code,
             template_path=self.template_edit.text(), stations=stations,
-            settings=self.merge_settings,
+            row_heights=dict(self._row_heights), settings=self.merge_settings,
         ))
 
     def _on_load_profile(self):
@@ -971,6 +1014,7 @@ class MainWindow(QtWidgets.QMainWindow):
             product_code=product_code,
             template_path=self.template_edit.text(),
             stations=stations,
+            row_heights=dict(self._row_heights),
             settings=self.merge_settings,
         )
         pm.save_profile(profile)
