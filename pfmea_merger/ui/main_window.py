@@ -138,7 +138,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setMinimumSize(1000, 640)
 
         cw = QtWidgets.QWidget()
-        self.setCentralWidget(cw)
         root = QtWidgets.QVBoxLayout(cw)
         root.setSpacing(12)
         root.setContentsMargins(16, 14, 16, 12)
@@ -202,13 +201,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_browse_btn.clicked.connect(self._pick_template)
         self.template_open_btn.clicked.connect(self._open_template)
         self.template_edit.installEventFilter(self)
-        self.cp_template_label = QtWidgets.QLabel("Template CP")
-        self.cp_template_label.setObjectName("SectionLabel")
-        self.cp_template_edit = QtWidgets.QLineEdit()
-        self.cp_template_edit.setReadOnly(True)
-        self.cp_template_browse_btn = QtWidgets.QPushButton("انتخاب Template CP")
-        self.cp_template_browse_btn.clicked.connect(self._pick_cp_template)
-
         self.profile_label = QtWidgets.QLabel()
         self.profile_label.setObjectName("SectionLabel")
         self.profile_combo = QtWidgets.QComboBox()
@@ -226,14 +218,11 @@ class MainWindow(QtWidgets.QMainWindow):
         c1.addWidget(self.template_edit,        0, 1, 1, 4)
         c1.addWidget(self.template_open_btn,    0, 5)
         c1.addWidget(self.template_browse_btn,  0, 6)
-        c1.addWidget(self.cp_template_label,    1, 0)
-        c1.addWidget(self.cp_template_edit,     1, 1, 1, 5)
-        c1.addWidget(self.cp_template_browse_btn, 1, 6)
-        c1.addWidget(self.profile_label,        2, 0)
-        c1.addWidget(self.profile_combo,        2, 1, 1, 2)
-        c1.addWidget(self.profile_load_btn,     2, 3)
-        c1.addWidget(self.profile_save_btn,     2, 4)
-        c1.addWidget(self.profile_delete_btn,   2, 5, 1, 2)
+        c1.addWidget(self.profile_label,        1, 0)
+        c1.addWidget(self.profile_combo,        1, 1, 1, 2)
+        c1.addWidget(self.profile_load_btn,     1, 3)
+        c1.addWidget(self.profile_save_btn,     1, 4)
+        c1.addWidget(self.profile_delete_btn,   1, 5, 1, 2)
         c1.setColumnStretch(1, 1)
         c1.setColumnStretch(2, 1)
         root.addWidget(card1)
@@ -377,9 +366,6 @@ class MainWindow(QtWidgets.QMainWindow):
         f = self.merge_btn.font(); f.setPointSize(11); f.setBold(True); self.merge_btn.setFont(f)
         self.merge_btn.clicked.connect(self._do_merge)
 
-        self.cp_merge_btn = QtWidgets.QPushButton("ساخت خروجی CP / Build CP")
-        self.cp_merge_btn.clicked.connect(self._do_cp_merge)
-
         self.open_output_btn = QtWidgets.QPushButton()
         self.open_output_btn.setEnabled(False)
         self.open_output_btn.clicked.connect(self._open_last_output)
@@ -402,11 +388,14 @@ class MainWindow(QtWidgets.QMainWindow):
         c3.addWidget(self.merge_btn,           2, 0, 1, 2)
         c3.addWidget(self.progress,            2, 2, 1, 2)
         c3.addWidget(self.open_output_btn,     2, 4)
-        c3.addWidget(self.cp_merge_btn,        3, 0, 1, 5)
         c3.setColumnStretch(1, 1)
         c3.setColumnStretch(2, 1)
         root.addWidget(card3)
 
+        tabs = QtWidgets.QTabWidget()
+        tabs.addTab(cw, "PFMEA")
+        tabs.addTab(self._build_cp_tab(), "Control Plan (CP)")
+        self.setCentralWidget(tabs)
         self.status = self.statusBar()
 
     # -------------------------------------------------- translation apply
@@ -1386,35 +1375,52 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.failed.connect(self._on_failed)
         self._worker.start()
 
+    def _build_cp_tab(self):
+        page = QtWidgets.QWidget(); layout = QtWidgets.QVBoxLayout(page)
+        layout.setContentsMargins(24, 24, 24, 24); layout.setSpacing(16)
+        title = QtWidgets.QLabel("Control Plan Merger")
+        title.setObjectName("SectionLabel"); layout.addWidget(title)
+        hint = QtWidgets.QLabel("فایل‌های CP ایستگاه‌ها را انتخاب کنید و خروجی مستقل بسازید")
+        hint.setProperty("muted", True); layout.addWidget(hint)
+        form = QtWidgets.QFormLayout(); form.setSpacing(12)
+        self.cp_template_edit = QtWidgets.QLineEdit(); self.cp_template_edit.setReadOnly(True)
+        b = QtWidgets.QPushButton("انتخاب Template CP")
+        b.clicked.connect(self._pick_cp_template)
+        row = QtWidgets.QHBoxLayout(); row.addWidget(self.cp_template_edit); row.addWidget(b)
+        form.addRow("Template CP:", row)
+        self.cp_folder_edit = QtWidgets.QLineEdit(); self.cp_folder_edit.setReadOnly(True)
+        b2 = QtWidgets.QPushButton("انتخاب پوشه فایل‌ها")
+        b2.clicked.connect(self._pick_cp_folder)
+        row2 = QtWidgets.QHBoxLayout(); row2.addWidget(self.cp_folder_edit); row2.addWidget(b2)
+        form.addRow("پوشه فایل‌های CP:", row2)
+        self.cp_output_edit = QtWidgets.QLineEdit(str(OUTPUT_DIR / "Merged_CP.xlsx"))
+        form.addRow("خروجی:", self.cp_output_edit)
+        layout.addLayout(form)
+        self.cp_merge_btn = QtWidgets.QPushButton("ساخت خروجی CP")
+        self.cp_merge_btn.setProperty("primary", True); self.cp_merge_btn.clicked.connect(self._do_cp_merge)
+        layout.addWidget(self.cp_merge_btn); layout.addStretch(1)
+        return page
+
     def _pick_cp_template(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Template CP", str(TEMPLATES_DIR), "Excel (*.xlsx *.xlsm)")
         if path: self.cp_template_edit.setText(path)
 
+    def _pick_cp_folder(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "پوشه فایل‌های CP")
+        if path: self.cp_folder_edit.setText(path)
+
     def _do_cp_merge(self):
-        """Build a CP output independently, without mixing it with PFMEA."""
-        template = self.cp_template_edit.text().strip()
-        if not template:
-            self._pick_cp_template(); template = self.cp_template_edit.text().strip()
-        if not template: return
-        folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "انتخاب پوشه فایل‌های CP / Select CP folder")
-        if not folder: return
+        template = self.cp_template_edit.text().strip(); folder = self.cp_folder_edit.text().strip()
+        if not template or not folder:
+            QtWidgets.QMessageBox.warning(self, "CP", "Template CP و پوشه فایل‌ها را انتخاب کنید."); return
         files = sorted(str(p) for p in Path(folder).glob("*.xlsx"))
         if not files:
-            QtWidgets.QMessageBox.warning(self, self.tr_.t("warning"), "فایل CP در پوشه پیدا نشد")
-            return
-        output = str(Path(self.output_edit.text().strip() or (OUTPUT_DIR / "Merged_CP.xlsx")))
-        output = str(Path(output).with_name("Merged_CP.xlsx"))
-        if Path(output).exists() and QtWidgets.QMessageBox.question(
-                self, self.tr_.t("confirm"), self.tr_.t("overwrite_output", path=output)) != QtWidgets.QMessageBox.StandardButton.Yes:
-            return
+            QtWidgets.QMessageBox.warning(self, "CP", "فایل CP در پوشه پیدا نشد."); return
+        output = self.cp_output_edit.text().strip() or str(OUTPUT_DIR / "Merged_CP.xlsx")
         try:
-            merge_cp(template, files, output)
-            self._last_output = output
-            self.open_output_btn.setEnabled(True)
-            QtWidgets.QMessageBox.information(self, "CP", f"خروجی CP ساخته شد:\n{output}")
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(self, self.tr_.t("error"), str(exc))
+            merge_cp(template, files, output); self._last_output = output
+            QtWidgets.QMessageBox.information(self, "CP", f"خروجی ساخته شد:\n{output}")
+        except Exception as exc: QtWidgets.QMessageBox.critical(self, "CP", str(exc))
 
     def _on_progress(self, pct: int, msg: str):
         self.progress.setValue(pct)
