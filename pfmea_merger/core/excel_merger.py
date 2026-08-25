@@ -373,7 +373,6 @@ def merge_pfmea(
     settings: MergeSettings,
     merge_history: bool = True,
     progress_cb=None,
-    rewrite_pfmea_formulas: bool = True,
 ) -> str:
     """
     Build the output workbook from a template + selected station blocks.
@@ -457,11 +456,9 @@ def merge_pfmea(
     # AQ2 is a template formula, so its source range and percentage must be
     # recalculated for the rows that actually made it into this output.
     data_end = write_row - 1
-    if rewrite_pfmea_formulas:
-        _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end, settings)
-    if rewrite_pfmea_formulas:
-        _update_rpn_formula(
-            out_ws, settings.data_start_row, data_end,
+    _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end, settings)
+    _update_rpn_formula(
+        out_ws, settings.data_start_row, data_end,
         max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
         settings,
     )
