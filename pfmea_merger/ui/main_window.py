@@ -1392,8 +1392,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         card2 = _make_card(); v = QtWidgets.QVBoxLayout(card2); v.setContentsMargins(14,12,14,12); v.setSpacing(9)
         bar=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("📄 افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("📁 افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
-        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
-        self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
+        self.cp_files=QtWidgets.QTableWidget(0, 3); self.cp_files.setHorizontalHeaderLabels(["استفاده", "ترتیب", "فایل CP"]); self.cp_files.horizontalHeader().setStretchLastSection(True); self.cp_files.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
+        self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self._cp_clear)
         for x in (self.cp_add_btn,self.cp_folder_btn): bar.addWidget(x)
         bar.addStretch(1); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.insertLayout(v.count()-1, bar)
         root.addWidget(card2,1)
@@ -1412,25 +1412,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _cp_add_files(self):
         paths,_=QtWidgets.QFileDialog.getOpenFileNames(self,"فایل‌های CP","","Excel (*.xlsx *.xlsm)")
-        for path in paths:
-            if not any(self.cp_files.item(i).text()==path for i in range(self.cp_files.count())): self.cp_files.addItem(path)
+        self._cp_add_paths(paths)
 
-    def _cp_remove_selected(self):
-        for item in self.cp_files.selectedItems():
-            self.cp_files.takeItem(self.cp_files.row(item))
+    def _cp_add_paths(self, paths):
+        existing=[self.cp_files.item(r,2).text() for r in range(self.cp_files.rowCount())]
+        for path in paths:
+            if path in existing: continue
+            r=self.cp_files.rowCount(); self.cp_files.insertRow(r)
+            use=QtWidgets.QTableWidgetItem(); use.setFlags(use.flags()|QtCore.Qt.ItemFlag.ItemIsUserCheckable); use.setCheckState(QtCore.Qt.CheckState.Checked)
+            self.cp_files.setItem(r,0,use); self.cp_files.setItem(r,1,QtWidgets.QTableWidgetItem(str(r+1))); self.cp_files.setItem(r,2,QtWidgets.QTableWidgetItem(path)); existing.append(path)
 
     def _cp_add_folder(self):
         folder=QtWidgets.QFileDialog.getExistingDirectory(self,"پوشه فایل‌های CP")
-        if folder:
-            for path in sorted(Path(folder).glob("*.xlsx")):
-                if not any(self.cp_files.item(i).text()==str(path) for i in range(self.cp_files.count())): self.cp_files.addItem(str(path))
+        if folder: self._cp_add_paths([str(p) for p in sorted(Path(folder).glob("*.xlsx"))])
 
-    def _pick_cp_output(self):
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "خروجی CP", self.cp_output_edit.text(), "Excel (*.xlsx)")
-        if path: self.cp_output_edit.setText(path)
+    def _cp_remove_selected(self):
+        for r in sorted({x.row() for x in self.cp_files.selectedItems()}, reverse=True): self.cp_files.removeRow(r)
+        self._cp_renumber()
+
+    def _cp_clear(self): self.cp_files.setRowCount(0)
+    def _cp_renumber(self):
+        for r in range(self.cp_files.rowCount()): self.cp_files.item(r,1).setText(str(r+1))
 
     def _do_cp_merge(self):
-        template=self.cp_template_edit.text().strip(); files=[self.cp_files.item(i).text() for i in range(self.cp_files.count())]
+        template=self.cp_template_edit.text().strip(); files=[self.cp_files.item(i,2).text() for i in range(self.cp_files.rowCount()) if self.cp_files.item(i,0).checkState()==QtCore.Qt.CheckState.Checked]
         if not template or not files:
             QtWidgets.QMessageBox.warning(self,"CP","Template و حداقل یک فایل CP را انتخاب کنید."); return
         output=self.cp_output_edit.text().strip() or str(OUTPUT_DIR/"Merged_CP.xlsx")
