@@ -18,6 +18,7 @@ from ..core.i18n import Translator
 from ..core.excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook
 from ..core.excel_merger import merge_pfmea
 from ..core import profile_manager as pm
+from ..core import backup_manager
 from .settings_dialog import SettingsDialog
 
 
@@ -164,6 +165,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about_btn.setFixedHeight(36)
         self.about_btn.clicked.connect(self._show_about)
 
+        self.backup_btn = QtWidgets.QPushButton()
+        self.backup_btn.clicked.connect(self._backup_system)
+        self.restore_backup_btn = QtWidgets.QPushButton()
+        self.restore_backup_btn.clicked.connect(self._restore_system)
+
         self.settings_btn = QtWidgets.QPushButton("⚙")
         self.settings_btn.setFixedSize(38, 38)
         f = self.settings_btn.font(); f.setPointSize(14); self.settings_btn.setFont(f)
@@ -171,6 +177,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings_btn.clicked.connect(self._open_settings)
 
         title_bar.addWidget(self.lang_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+        title_bar.addWidget(self.backup_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
+        title_bar.addWidget(self.restore_backup_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         title_bar.addWidget(self.about_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         title_bar.addWidget(self.settings_btn, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         root.addLayout(title_bar)
@@ -400,6 +408,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else "PFMEA template + station files → one merged output"
         )
         self.lang_btn.setText("🌐 " + ("EN" if self.tr_.is_rtl() else "فا"))
+        self.backup_btn.setText("💾 " + t("backup"))
+        self.restore_backup_btn.setText("↶ " + t("restore_backup"))
         self.about_btn.setText("ℹ " + t("about"))
         self.template_label.setText(t("template_label"))
         self.template_open_btn.setText("📖 " + t("open_template"))
@@ -1140,6 +1150,62 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         pm.delete_profile(name)
         self._reload_profile_combo()
+
+    def _backup_system(self):
+        start = str(Path(self.output_edit.text() or OUTPUT_DIR / "").parent / "PFMEA_Merger_Backup.zip")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, self.tr_.t("backup"), start,
+            f"{self.tr_.t('backup_file')} (*.zip)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+        try:
+            backup_manager.create_backup(path)
+            QtWidgets.QMessageBox.information(
+                self, self.tr_.t("info"),
+                self.tr_.t("backup_created") + f"\n{path}",
+            )
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, self.tr_.t("error"), str(exc))
+
+    def _restore_system(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, self.tr_.t("restore_backup"), str(Path.home()),
+            f"{self.tr_.t('backup_file')} (*.zip)",
+        )
+        if not path:
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self, self.tr_.t("confirm"), self.tr_.t("backup_confirm"),
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        try:
+            backup_manager.restore_backup(path)
+            self.app_settings = AppSettings.load()
+            self.merge_settings = MergeSettings.from_dict(
+                self.app_settings.saved_merge_settings
+            )
+            self._restore_last()
+            self._profile_change_guard = True
+            self.profile_combo.setCurrentIndex(0)
+            self._profile_change_guard = False
+            self._active_profile_name = ""
+            self._reload_profile_combo()
+            self._apply_language()
+            self._refresh_all()
+            QtWidgets.QMessageBox.information(
+                self, self.tr_.t("info"), self.tr_.t("backup_restored"),
+            )
+        except Exception as exc:
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            box.setWindowTitle(self.tr_.t("error"))
+            box.setText("بازیابی بک‌آپ انجام نشد. فایل انتخاب‌شده معتبر نیست یا ناقص است.")
+            box.setDetailedText(traceback.format_exc())
+            box.exec()
 
     def _show_about(self):
         dialog = QtWidgets.QDialog(self)
