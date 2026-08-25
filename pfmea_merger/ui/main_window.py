@@ -55,6 +55,13 @@ class MergeWorker(QtCore.QThread):
 def _make_card() -> QtWidgets.QFrame:
     f = QtWidgets.QFrame()
     f.setObjectName("Card")
+    # A subtle shadow separates cards from the navy background and gives the
+    # interface a modern layered look without adding heavy visual noise.
+    shadow = QtWidgets.QGraphicsDropShadowEffect(f)
+    shadow.setBlurRadius(22)
+    shadow.setOffset(0, 5)
+    shadow.setColor(QtGui.QColor(0, 0, 0, 80))
+    f.setGraphicsEffect(shadow)
     return f
 
 
@@ -115,7 +122,8 @@ class MainWindow(QtWidgets.QMainWindow):
         title_col = QtWidgets.QVBoxLayout()
         title_col.setSpacing(2)
         self.title_label = QtWidgets.QLabel()
-        f = self.title_label.font(); f.setPointSize(15); f.setBold(True)
+        self.title_label.setObjectName("AppTitle")
+        f = self.title_label.font(); f.setPointSize(17); f.setBold(True)
         self.title_label.setFont(f)
         self.subtitle_label = QtWidgets.QLabel()
         self.subtitle_label.setProperty("muted", True)

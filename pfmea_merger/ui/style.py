@@ -6,22 +6,24 @@ Applied via `QApplication.setStyle('Fusion')` and a QSS stylesheet.
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 
-# Palette (Material-ish dark)
-BG          = "#1e1f22"
-BG_ELEV     = "#2b2d31"
-BG_ELEV2    = "#313338"
-BORDER      = "#3d3f45"
-BORDER_SOFT = "#35363b"
-TEXT        = "#e6e6e6"
-TEXT_DIM    = "#9ba0a6"
-PRIMARY     = "#5865f2"
-PRIMARY_HOV = "#6c78ff"
-PRIMARY_PRS = "#4750d0"
-DANGER      = "#f04747"
-SUCCESS     = "#3ba55d"
-ACCENT      = "#00b8d4"
-ROW_ALT     = "#26272b"
-SEL_BG      = "#3f4beb"
+# Palette: deep navy surfaces with a violet/cyan accent system.
+# The contrast is intentionally softer than pure black so long Excel sessions
+# are easier on the eyes.
+BG          = "#111827"
+BG_ELEV     = "#172235"
+BG_ELEV2    = "#1e2d45"
+BORDER      = "#30435f"
+BORDER_SOFT = "#263852"
+TEXT        = "#eef4ff"
+TEXT_DIM    = "#9aabc3"
+PRIMARY     = "#6d5dfc"
+PRIMARY_HOV = "#8275ff"
+PRIMARY_PRS = "#5648df"
+DANGER      = "#ff647c"
+SUCCESS     = "#35d07f"
+ACCENT      = "#28c7d9"
+ROW_ALT     = "#142036"
+SEL_BG      = "#3e3aa8"
 
 
 def apply_dark_theme(app: QtWidgets.QApplication) -> None:
@@ -59,11 +61,20 @@ def apply_dark_theme(app: QtWidgets.QApplication) -> None:
 
 _STYLESHEET = f"""
 * {{
+    font-family: "Segoe UI", "Tahoma", sans-serif;
     font-size: 10pt;
 }}
 
-QMainWindow, QDialog {{
+QMainWindow {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 {BG}, stop:1 #0d1524);
+}}
+
+QDialog {{
     background: {BG};
+}}
+
+QMainWindow, QDialog {{
     color: {TEXT};
 }}
 
@@ -74,6 +85,11 @@ QLabel {{
 
 QLabel[muted="true"] {{
     color: {TEXT_DIM};
+}}
+
+QLabel#AppTitle {{
+    color: #f4f7ff;
+    letter-spacing: 0.3px;
 }}
 
 QToolTip {{
@@ -90,11 +106,16 @@ QAbstractSpinBox {{
     background: {BG_ELEV};
     color: {TEXT};
     border: 1px solid {BORDER};
-    border-radius: 6px;
-    padding: 6px 8px;
+    border-radius: 9px;
+    padding: 7px 10px;
     selection-background-color: {SEL_BG};
     selection-color: white;
     min-height: 22px;
+}}
+
+QLineEdit:hover, QPlainTextEdit:hover, QTextEdit:hover,
+QComboBox:hover, QSpinBox:hover {{
+    border-color: #496181;
 }}
 
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus,
@@ -130,9 +151,12 @@ QPushButton {{
     background: {BG_ELEV2};
     color: {TEXT};
     border: 1px solid {BORDER};
-    border-radius: 6px;
-    padding: 7px 14px;
-    min-height: 18px;
+    border-radius: 9px;
+    padding: 8px 15px;
+    min-height: 19px;
+}}
+QPushButton:focus {{
+    border: 1px solid {ACCENT};
 }}
 QPushButton:hover {{
     background: #3a3c42;
@@ -199,22 +223,27 @@ QGroupBox::title {{
 }}
 
 QFrame#Card {{
-    background: {BG_ELEV};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 {BG_ELEV}, stop:1 #142036);
     border: 1px solid {BORDER_SOFT};
-    border-radius: 10px;
+    border-radius: 14px;
 }}
 
 /* ----- Table ----- */
 QTableWidget, QTableView {{
-    background: {BG_ELEV};
+    background: #132039;
     alternate-background-color: {ROW_ALT};
     color: {TEXT};
-    gridline-color: {BORDER_SOFT};
-    border: 1px solid {BORDER_SOFT};
-    border-radius: 8px;
+    gridline-color: transparent;
+    border: 1px solid {BORDER};
+    border-radius: 11px;
     selection-background-color: {SEL_BG};
     selection-color: white;
     outline: 0;
+    padding: 2px;
+}}
+QTableWidget::item:hover, QTableView::item:hover {{
+    background: #253759;
 }}
 QTableWidget::item, QTableView::item {{
     padding: 4px 8px;
@@ -226,11 +255,11 @@ QTableWidget::item:selected, QTableView::item:selected {{
 }}
 
 QHeaderView::section {{
-    background: {BG_ELEV2};
-    color: {TEXT};
-    padding: 8px;
+    background: #223452;
+    color: #dce8ff;
+    padding: 10px 9px;
     border: 0;
-    border-bottom: 1px solid {BORDER};
+    border-bottom: 2px solid {PRIMARY};
     font-weight: 600;
 }}
 QHeaderView::section:hover {{
