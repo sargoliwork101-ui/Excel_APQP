@@ -1387,10 +1387,10 @@ class MainWindow(QtWidgets.QMainWindow):
         top.addWidget(QtWidgets.QLabel("خروجی:"),1,0); top.addWidget(self.cp_output_edit,1,1,1,2)
         layout.addLayout(top)
         tools=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
-        self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(lambda: [self.cp_files.takeItem(i) for i in reversed(range(self.cp_files.count())) if self.cp_files.item(i).isSelected()]); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
-        for x in (self.cp_add_btn,self.cp_folder_btn): tools.addWidget(x)
-        tools.addStretch(1); tools.addWidget(self.cp_remove_btn); tools.addWidget(self.cp_clear_btn); layout.addLayout(tools)
         self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); layout.addWidget(self.cp_files,1)
+        self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
+        for x in (self.cp_add_btn,self.cp_folder_btn): tools.addWidget(x)
+        tools.addStretch(1); tools.addWidget(self.cp_remove_btn); tools.addWidget(self.cp_clear_btn); layout.insertLayout(layout.count()-1, tools)
         self.cp_merge_btn=QtWidgets.QPushButton("ساخت خروجی CP"); self.cp_merge_btn.setProperty("primary",True); self.cp_merge_btn.clicked.connect(self._do_cp_merge); layout.addWidget(self.cp_merge_btn)
         return page
 
@@ -1402,6 +1402,10 @@ class MainWindow(QtWidgets.QMainWindow):
         paths,_=QtWidgets.QFileDialog.getOpenFileNames(self,"فایل‌های CP","","Excel (*.xlsx *.xlsm)")
         for path in paths:
             if not any(self.cp_files.item(i).text()==path for i in range(self.cp_files.count())): self.cp_files.addItem(path)
+
+    def _cp_remove_selected(self):
+        for item in self.cp_files.selectedItems():
+            self.cp_files.takeItem(self.cp_files.row(item))
 
     def _cp_add_folder(self):
         folder=QtWidgets.QFileDialog.getExistingDirectory(self,"پوشه فایل‌های CP")
