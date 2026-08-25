@@ -19,6 +19,8 @@ from copy import copy
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 import re
+import tempfile
+import zipfile
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -150,6 +152,18 @@ def _copy_row_range(
     return row_count
 
 
+def _copy_images(src_ws: Worksheet, dst_ws: Worksheet) -> None:
+    """Copy header logos/images and their anchors from the template."""
+    for image in getattr(src_ws, "_images", []):
+        try:
+            cloned = copy(image)
+            cloned.anchor = copy(image.anchor)
+            dst_ws.add_image(cloned)
+        except Exception:
+            # A non-critical drawing must never prevent the PFMEA merge.
+            continue
+
+
 def _copy_sheet_settings(src_ws: Worksheet, dst_ws: Worksheet) -> None:
     """Copy sheet-level formatting (page setup, freeze pane, RTL, print area)."""
     try:
@@ -276,6 +290,69 @@ def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
                 dst_ws.conditional_formatting.add(new_ref, copied_rule)
 
 
+def _attach_template_drawing(output_path: str, template_path: str) -> None:
+    """Attach unsupported template drawings (logo/shapes) to the output ZIP.
+
+    openpyxl does not load the legacy/grouped drawing used by this PFMEA
+    header, so copying cells alone silently drops the logo. The drawing XML
+    and its image relationship are safe to carry over unchanged because the
+    output sheet keeps the same header coordinates.
+    """
+    try:
+        with zipfile.ZipFile(template_path, "r") as src, zipfile.ZipFile(output_path, "r") as out:
+            names = set(src.namelist())
+            drawing_names = [n for n in names if n.startswith("xl/drawings/drawing") and n.endswith(".xml")]
+            if not drawing_names:
+                return
+            drawing = sorted(drawing_names)[0]
+            drawing_rels = drawing.replace("xl/drawings/", "xl/drawings/_rels/") + ".rels"
+            media_names = [n for n in names if n.startswith("xl/media/")]
+            sheet_name = "xl/worksheets/sheet1.xml"
+            sheet_rels = "xl/worksheets/_rels/sheet1.xml.rels"
+            sheet_xml = out.read(sheet_name).decode("utf-8")
+            if "xmlns:r=" not in sheet_xml:
+                sheet_xml = sheet_xml.replace(
+                    "<worksheet ",
+                    '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ',
+                    1,
+                )
+            if "<drawing " not in sheet_xml:
+                sheet_xml = sheet_xml.replace("</worksheet>", '<drawing r:id="rId2"/></worksheet>')
+            rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '
+                        'Target="../drawings/drawing1.xml"/></Relationships>')
+            content = out.read("[Content_Types].xml").decode("utf-8")
+            if 'Extension="png"' not in content:
+                content = content.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>')
+            if 'PartName="/xl/drawings/drawing1.xml"' not in content:
+                content = content.replace("</Types>", '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>')
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=str(Path(output_path).parent)) as tmp:
+                temp_name = tmp.name
+            try:
+                with zipfile.ZipFile(temp_name, "w", zipfile.ZIP_DEFLATED) as new:
+                    has_sheet_rels = False
+                    for item in out.infolist():
+                        data = sheet_xml.encode() if item.filename == sheet_name else content.encode() if item.filename == "[Content_Types].xml" else out.read(item.filename)
+                        if item.filename == sheet_rels:
+                            has_sheet_rels = True
+                            data = rels_xml.encode()
+                        new.writestr(item, data)
+                    if not has_sheet_rels:
+                        new.writestr(sheet_rels, rels_xml.encode())
+                    new.writestr(drawing, src.read(drawing))
+                    if drawing_rels in names:
+                        new.writestr(drawing_rels, src.read(drawing_rels))
+                    for media in media_names:
+                        new.writestr(media, src.read(media))
+                Path(temp_name).replace(output_path)
+            finally:
+                Path(temp_name).unlink(missing_ok=True)
+    except Exception:
+        # A logo is valuable, but must not make a valid PFMEA output fail.
+        return
+
+
 # ---------------------------------------------------------------------------
 # public API
 
@@ -329,6 +406,7 @@ def merge_pfmea(
 
     _copy_sheet_settings(tpl_ws, out_ws)
     _copy_column_dims(tpl_ws, out_ws, max_col)
+    _copy_images(tpl_ws, out_ws)
 
     report(5, "Copying header...")
     _copy_row_range(tpl_ws, out_ws, 1, settings.header_rows, 1, max_col)
@@ -406,6 +484,7 @@ def merge_pfmea(
         ) from e
     template_wb.close()
     out_wb.close()
+    _attach_template_drawing(output_path, template_path)
     report(100, "Done.")
     return output_path
 
