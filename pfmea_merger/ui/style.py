@@ -23,7 +23,7 @@ DANGER      = "#ff647c"
 SUCCESS     = "#35d07f"
 ACCENT      = "#28c7d9"
 ROW_ALT     = "#142036"
-SEL_BG      = "#3e3aa8"
+SEL_BG      = "#302e72"
 
 
 def apply_dark_theme(app: QtWidgets.QApplication) -> None:
@@ -260,10 +260,9 @@ QTableWidget::item:hover, QTableView::item:hover {{
     background: #263a5d;
 }}
 QTableWidget::item:selected, QTableView::item:selected {{
-    /* More opaque than the old 20% highlight, but still keeps cell colors visible. */
-    background: rgba(109, 93, 252, 0.38);
-    color: {TEXT};
-    border-bottom: 1px solid rgba(130, 117, 255, 0.70);
+    /* Keep the highlight very soft so the original cell text/colors stay visible. */
+    background: rgba(109, 93, 252, 0.10);
+    border-bottom: 1px solid rgba(130, 117, 255, 0.32);
 }}
 
 QHeaderView::section {{

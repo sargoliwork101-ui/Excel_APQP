@@ -217,7 +217,14 @@ class MainWindow(QtWidgets.QMainWindow):
         c2.addWidget(self.hint_label)
 
         self.table = QtWidgets.QTableWidget(0, 6)
-        self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(True)
+        self.table.verticalHeader().setFixedWidth(38)
+        # Allow direct row-height editing by dragging the boundary between
+        # rows. The settings dialog also provides a fixed height override.
+        self.table.verticalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeMode.Interactive
+        )
+        self.table.verticalHeader().setMinimumSectionSize(28)
         self.table.setAlternatingRowColors(True)
         # A clean, spaced table reads more like a modern list than a raw
         # spreadsheet while retaining row selection and keyboard support.
