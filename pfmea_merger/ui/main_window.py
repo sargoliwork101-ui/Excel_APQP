@@ -1434,6 +1434,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _cp_renumber(self):
         for r in range(self.cp_files.rowCount()): self.cp_files.item(r,1).setText(str(r+1))
 
+    def _pick_cp_output(self):
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "خروجی CP", self.cp_output_edit.text(), "Excel (*.xlsx)"
+        )
+        if path:
+            self.cp_output_edit.setText(path)
+
     def _do_cp_merge(self):
         template=self.cp_template_edit.text().strip(); files=[self.cp_files.item(i,2).text() for i in range(self.cp_files.rowCount()) if self.cp_files.item(i,0).checkState()==QtCore.Qt.CheckState.Checked]
         if not template or not files:
