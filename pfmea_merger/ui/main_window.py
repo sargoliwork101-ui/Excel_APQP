@@ -228,7 +228,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setAlternatingRowColors(True)
         # A clean, spaced table reads more like a modern list than a raw
         # spreadsheet while retaining row selection and keyboard support.
-        self.table.setShowGrid(False)
+        # Keep light grid lines: they make the row/column boundaries clear
+        # without returning to the old heavy spreadsheet look.
+        self.table.setShowGrid(True)
         self.table.setSelectionBehavior(
             QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(

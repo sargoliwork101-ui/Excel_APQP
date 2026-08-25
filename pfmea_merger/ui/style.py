@@ -23,7 +23,7 @@ DANGER      = "#ff647c"
 SUCCESS     = "#35d07f"
 ACCENT      = "#28c7d9"
 ROW_ALT     = "#142036"
-SEL_BG      = "#302e72"
+SEL_BG      = "#25234f"
 
 
 def apply_dark_theme(app: QtWidgets.QApplication) -> None:
@@ -240,11 +240,11 @@ QTableWidget, QTableView {{
     background: #132039;
     alternate-background-color: {ROW_ALT};
     color: {TEXT};
-    gridline-color: transparent;
+    gridline-color: #38506f;
     border: 1px solid {BORDER};
     border-radius: 11px;
-    selection-background-color: {SEL_BG};
-    selection-color: white;
+    selection-background-color: rgba(109, 93, 252, 0.10);
+    selection-color: {TEXT};
     outline: 0;
     padding: 2px;
 }}
