@@ -606,16 +606,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
             failure_text = r.block.failure_mode_text or "—"
             rows_item = QtWidgets.QTableWidgetItem(failure_text)
-            rows_item.setToolTip(
-                f"C{r.block.start_row}: {failure_text}"
+            rows_item.setToolTip(failure_text)
+            rows_item.setData(
+                QtCore.Qt.ItemDataRole.UserRole,
+                len(r.block.failure_modes),
             )
             rows_item.setForeground(QtGui.QColor("#d8e7f7"))
             rows_item.setBackground(QtGui.QColor("#19334a"))
             rows_item.setTextAlignment(
                 QtCore.Qt.AlignmentFlag.AlignLeft
-                | QtCore.Qt.AlignmentFlag.AlignVCenter
+                | QtCore.Qt.AlignmentFlag.AlignTop
             )
             self.table.setItem(i, self.COL_ROWS, rows_item)
+            # Give every failure mode its own readable line. The cap prevents
+            # one unusually large file from making the whole table unusable.
+            mode_count = len(r.block.failure_modes)
+            self.table.setRowHeight(i, min(260, max(42, 28 + mode_count * 24)))
 
             file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)
             file_item.setToolTip(r.path)

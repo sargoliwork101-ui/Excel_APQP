@@ -25,7 +25,7 @@ STRINGS = {
     "col_order": {"fa": "ترتیب", "en": "Order"},
     "col_opc": {"fa": "کد OPC", "en": "OPC Code"},
     "col_name": {"fa": "نام ایستگاه", "en": "Station Name"},
-    "col_rows": {"fa": "حالت خرابی (سلول C)", "en": "Failure mode (cell C)"},
+    "col_rows": {"fa": "حالت‌های خرابی", "en": "Failure modes"},
     "col_file": {"fa": "فایل", "en": "File"},
     "select_all": {"fa": "انتخاب همه", "en": "Select All"},
     "deselect_all": {"fa": "لغو همه", "en": "Deselect All"},
