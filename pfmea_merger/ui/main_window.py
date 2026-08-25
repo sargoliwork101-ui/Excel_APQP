@@ -1394,8 +1394,10 @@ class MainWindow(QtWidgets.QMainWindow):
         bar=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("📄 افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("📁 افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
         self.cp_files=QtWidgets.QTableWidget(0, 3); self.cp_files.setHorizontalHeaderLabels(["استفاده", "ترتیب", "فایل CP"]); self.cp_files.horizontalHeader().setStretchLastSection(True); self.cp_files.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
         self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self._cp_clear)
-        for x in (self.cp_add_btn,self.cp_folder_btn): bar.addWidget(x)
-        bar.addStretch(1); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.insertLayout(v.count()-1, bar)
+        self.cp_select_all_btn=QtWidgets.QPushButton("همه / All"); self.cp_deselect_btn=QtWidgets.QPushButton("لغو همه / None"); self.cp_up_btn=QtWidgets.QPushButton("⬆"); self.cp_down_btn=QtWidgets.QPushButton("⬇")
+        self.cp_select_all_btn.clicked.connect(lambda: self._cp_set_all(True)); self.cp_deselect_btn.clicked.connect(lambda: self._cp_set_all(False)); self.cp_up_btn.clicked.connect(lambda: self._cp_move(-1)); self.cp_down_btn.clicked.connect(lambda: self._cp_move(1))
+        for x in (self.cp_add_btn,self.cp_folder_btn,self.cp_select_all_btn,self.cp_deselect_btn): bar.addWidget(x)
+        bar.addStretch(1); bar.addWidget(self.cp_up_btn); bar.addWidget(self.cp_down_btn); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.insertLayout(v.count()-1, bar)
         root.addWidget(card2,1)
 
         card3 = _make_card(); g = QtWidgets.QGridLayout(card3); g.setContentsMargins(14,12,14,12); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
@@ -1429,6 +1431,20 @@ class MainWindow(QtWidgets.QMainWindow):
     def _cp_remove_selected(self):
         for r in sorted({x.row() for x in self.cp_files.selectedItems()}, reverse=True): self.cp_files.removeRow(r)
         self._cp_renumber()
+
+    def _cp_set_all(self, checked):
+        state=QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked
+        for r in range(self.cp_files.rowCount()): self.cp_files.item(r,0).setCheckState(state)
+
+    def _cp_move(self, direction):
+        rows=sorted({x.row() for x in self.cp_files.selectedItems()})
+        if len(rows)!=1: return
+        r=rows[0]; nr=r+direction
+        if nr<0 or nr>=self.cp_files.rowCount(): return
+        vals=[self.cp_files.takeItem(r,c) for c in range(self.cp_files.columnCount())]
+        self.cp_files.insertRow(nr)
+        for c,item in enumerate(vals): self.cp_files.setItem(nr,c,item)
+        self.cp_files.selectRow(nr); self._cp_renumber()
 
     def _cp_clear(self): self.cp_files.setRowCount(0)
     def _cp_renumber(self):
