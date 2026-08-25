@@ -31,18 +31,18 @@ from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last
 # helpers to copy formatting
 
 def _copy_cell(src_cell, dst_cell) -> None:
-    """Copy value + style + hyperlink from src to dst."""
+    """Copy value + style + hyperlink from src to dst efficiently.
+
+    Assigning the complete internal style once is considerably faster than
+    copying font/fill/border/alignment/protection separately for every cell,
+    and preserves the exact same formatting without changing the output.
+    """
     dst_cell.value = src_cell.value
     if src_cell.has_style:
-        dst_cell.font = copy(src_cell.font)
-        dst_cell.fill = copy(src_cell.fill)
-        dst_cell.border = copy(src_cell.border)
-        dst_cell.alignment = copy(src_cell.alignment)
-        dst_cell.number_format = src_cell.number_format
-        dst_cell.protection = copy(src_cell.protection)
+        dst_cell._style = copy(src_cell._style)
     if src_cell.hyperlink:
         try:
-            dst_cell.hyperlink = copy(src_cell.hyperlink)
+            dst_cell._hyperlink = copy(src_cell._hyperlink)
         except Exception:
             pass
     # Comments on merged cells break the file, so skip them.
@@ -255,7 +255,7 @@ def merge_pfmea(
                 pass
 
     report(1, "Loading template...")
-    template_wb = openpyxl.load_workbook(template_path)
+    template_wb = openpyxl.load_workbook(template_path, keep_links=False)
 
     tpl_sheet_name = settings.sheet_name
     if tpl_sheet_name not in template_wb.sheetnames:
@@ -270,6 +270,14 @@ def merge_pfmea(
     # ---- build the output workbook and copy header ------------------------
     out_wb = openpyxl.Workbook()
     out_wb.remove(out_wb.active)
+    # Let Excel recalculate AQ2 (and other formulas) as soon as the output is
+    # opened instead of leaving a stale cached value from the template.
+    try:
+        out_wb.calculation.fullCalcOnLoad = True
+        out_wb.calculation.forceFullCalc = True
+        out_wb.calculation.calcMode = "auto"
+    except Exception:
+        pass
     out_ws = out_wb.create_sheet(title=tpl_sheet_name)
 
     _copy_sheet_settings(tpl_ws, out_ws)
@@ -286,7 +294,7 @@ def merge_pfmea(
         report(5 + int(80 * i / n),
                f"Merging station {i}/{n}: {block.display_label}")
         if src_path not in src_cache:
-            src_cache[src_path] = openpyxl.load_workbook(src_path)
+            src_cache[src_path] = openpyxl.load_workbook(src_path, keep_links=False)
         src_wb = src_cache[src_path]
         sheet = tpl_sheet_name if tpl_sheet_name in src_wb.sheetnames \
             else src_wb.sheetnames[0]
