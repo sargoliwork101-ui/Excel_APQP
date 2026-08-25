@@ -175,6 +175,10 @@ STRINGS = {
         "fa": "تغییرات پروفایل «{name}» ذخیره شود؟",
         "en": "Save changes to profile '{name}' before switching?",
     },
+    "save_profile_changes": {
+        "fa": "تغییرات (حذف ایستگاه‌های انتخاب‌شده) در پروفایل «{name}» ذخیره شود؟",
+        "en": "Save these station changes (removal) to profile '{name}'?",
+    },
     "overwrite_output": {
         "fa": "فایل خروجی از قبل وجود دارد:\n{path}\n\nجایگزین شود؟",
         "en": "Output file already exists:\n{path}\n\nOverwrite?",

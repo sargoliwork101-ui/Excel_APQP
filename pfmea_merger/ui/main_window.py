@@ -659,10 +659,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 removed_codes.add(str(self.rows[index].block.opc_code))
                 del self.rows[index]
         if self._active_profile_name:
-            # Removal is a visibility choice for this profile only. Keep the
-            # workbook loaded so another profile can still use the station.
-            self._hidden_stations.update(removed_codes)
-            self._save_profile_data(self._active_profile_name)
+            # Removing a station under an active profile changes that profile.
+            # Never persist profile changes silently — ask the user first.
+            answer = QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"),
+                self.tr_.t("save_profile_changes", name=self._active_profile_name),
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.Yes,
+            )
+            if answer == QtWidgets.QMessageBox.StandardButton.Yes:
+                # Removal is a visibility choice for this profile only. Keep
+                # the workbook loaded so another profile can still use the station.
+                self._hidden_stations.update(removed_codes)
+                self._save_profile_data(self._active_profile_name)
+            # "No" keeps the removal for this session only; the profile file
+            # stays untouched and switching profiles still offers to save.
         else:
             # Without a profile, retain the old session-only removal behavior.
             remaining_paths = {r.path for r in self.rows}
