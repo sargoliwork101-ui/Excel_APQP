@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 import json
 import re
 
-from .config import PROFILES_DIR, MergeSettings
+from .config import PROFILES_DIR, MergeSettings, CPSettings
 
 
 _SAFE = re.compile(r"[^A-Za-z0-9_\-\u0600-\u06FF ]+")
@@ -62,6 +62,7 @@ class ProductProfile:
     row_heights: Dict[str, int] = field(default_factory=dict)
     hidden_stations: List[str] = field(default_factory=list)
     settings: MergeSettings = field(default_factory=MergeSettings)
+    cp_settings: CPSettings = field(default_factory=CPSettings)
 
     # ---- helpers ---------------------------------------------------
     @property
@@ -89,11 +90,13 @@ class ProductProfile:
             "row_heights": self.row_heights,
             "hidden_stations": self.hidden_stations,
             "settings": self.settings.to_dict(),
+            "cp_settings": self.cp_settings.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProductProfile":
         settings = MergeSettings.from_dict(d.get("settings", {}))
+        cp_settings = CPSettings.from_dict(d.get("cp_settings", {}))
         # Prefer new "stations" field; fall back to old "station_order".
         raw_stations = d.get("stations")
         if raw_stations is None:
@@ -118,6 +121,7 @@ class ProductProfile:
                          if str(v).isdigit() and int(v) > 0},
             hidden_stations=[str(x) for x in raw_hidden],
             settings=settings,
+            cp_settings=cp_settings,
         )
 
 

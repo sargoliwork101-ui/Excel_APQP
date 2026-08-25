@@ -90,6 +90,29 @@ class MergeSettings:
 
 
 @dataclass
+class CPSettings:
+    """Independent Control Plan layout settings."""
+    sheet_name: str = "برنامه کنترل  "
+    header_start: int = 1
+    header_end: int = 9
+    data_start: int = 10
+    footer_start: int = 0
+    footer_end: int = 0
+    history_sheet: str = "تغییرات"
+
+    def to_dict(self): return asdict(self)
+    @classmethod
+    def from_dict(cls, value):
+        if not isinstance(value, dict): return cls()
+        allowed={k:v for k,v in value.items() if k in cls.__dataclass_fields__}
+        for k in ("header_start","header_end","data_start","footer_start","footer_end"):
+            if k in allowed:
+                try: allowed[k]=int(allowed[k])
+                except (TypeError,ValueError): allowed.pop(k)
+        return cls(**allowed)
+
+
+@dataclass
 class AppSettings:
     """Global app settings."""
     language: str = "fa"            # 'fa' or 'en'
