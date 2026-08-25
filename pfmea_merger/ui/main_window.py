@@ -1086,6 +1086,7 @@ class MainWindow(QtWidgets.QMainWindow):
             template_path=self.template_edit.text(),
             stations=stations,
             row_heights=dict(self._row_heights),
+            hidden_stations=sorted(self._hidden_stations),
             settings=self.merge_settings,
         )
         pm.save_profile(profile)
@@ -1159,7 +1160,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self, self.tr_.t("warning"), self.tr_.t("no_files"))
             return
         selections: List[Tuple[str, StationBlock]] = [
-            (r.path, r.block) for r in self.rows if r.enabled
+            (r.path, r.block) for r in self.rows
+            if r.enabled and r.path and Path(r.path).exists()
         ]
         if not selections:
             QtWidgets.QMessageBox.warning(
@@ -1188,6 +1190,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 profile_selections = [
                     (r.path, r.block) for r in self.rows
                     if str(r.block.opc_code) in enabled
+                    and r.path and Path(r.path).exists()
                 ]
                 profile_selections.sort(
                     key=lambda pair: order_map.get(str(pair[1].opc_code), 10_000)

@@ -21,8 +21,8 @@ STRINGS = {
 
     # ---- list
     "stations_hint": {
-        "fa": "ایستگاه‌ها (با درگ می‌توانید ترتیب را تغییر دهید):",
-        "en": "Stations (drag to reorder):",
+        "fa": "ایستگاه‌ها — برای جابه‌جایی از دکمه‌های فلش پایین جدول استفاده کنید:",
+        "en": "Stations — use the arrow buttons below the table to reorder:",
     },
     "col_use": {"fa": "استفاده", "en": "Use"},
     "col_order": {"fa": "ترتیب", "en": "Order"},
