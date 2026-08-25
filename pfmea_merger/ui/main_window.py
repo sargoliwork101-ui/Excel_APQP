@@ -1392,10 +1392,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         card2 = _make_card(); v = QtWidgets.QVBoxLayout(card2); v.setContentsMargins(14,12,14,12); v.setSpacing(9)
         bar=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("📄 افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("📁 افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
+        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
         self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
         for x in (self.cp_add_btn,self.cp_folder_btn): bar.addWidget(x)
-        bar.addStretch(1); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.addLayout(bar)
-        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
+        bar.addStretch(1); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.insertLayout(v.count()-1, bar)
         root.addWidget(card2,1)
 
         card3 = _make_card(); g = QtWidgets.QGridLayout(card3); g.setContentsMargins(14,12,14,12); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
