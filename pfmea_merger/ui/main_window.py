@@ -333,6 +333,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.open_after_chk = QtWidgets.QCheckBox()
         self.open_after_chk.setChecked(True)
         self.all_profiles_chk = QtWidgets.QCheckBox()
+        self.all_profiles_chk.stateChanged.connect(self._on_all_profiles_toggled)
 
         self.merge_btn = QtWidgets.QPushButton()
         self.merge_btn.setMinimumHeight(42)
@@ -1054,6 +1055,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self._refresh_all()
 
     # ------------------------------------------------------------- merge
+    def _on_all_profiles_toggled(self, state: int):
+        batch = state == QtCore.Qt.CheckState.Checked.value
+        # Batch mode produces several files, so opening a single Excel file
+        # would be ambiguous. Open the output folder instead.
+        self.open_after_chk.setEnabled(not batch)
+        if batch:
+            self.open_after_chk.setChecked(False)
+
     def _do_merge(self):
         template = self.template_edit.text().strip()
         if not template:
@@ -1155,10 +1164,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress.setValue(100)
         self._last_output = out_path
         self.open_output_btn.setEnabled(True)
+        outputs = getattr(self._worker, "output_paths", [out_path])
+        batch = len(outputs) > 1 or self.all_profiles_chk.isChecked()
         self.status.showMessage(
             "● " + self.tr_.t("merge_done_status", path=Path(out_path).name)
         )
-        if self.open_after_chk.isChecked():
+        if batch:
+            # In all-profiles mode let the user choose which generated Excel
+            # file to open from the folder.
+            self._open_folder(str(Path(out_path).parent))
+        elif self.open_after_chk.isChecked():
             self._open_file(out_path)
         else:
             box = QtWidgets.QMessageBox(self)

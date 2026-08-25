@@ -48,8 +48,10 @@ def apply_dark_theme(app: QtWidgets.QApplication) -> None:
     pal.setColor(QtGui.QPalette.ColorRole.Button,          c(BG_ELEV2))
     pal.setColor(QtGui.QPalette.ColorRole.ButtonText,      c(TEXT))
     pal.setColor(QtGui.QPalette.ColorRole.BrightText,      c("#ffffff"))
-    pal.setColor(QtGui.QPalette.ColorRole.Highlight,       c(SEL_BG))
-    pal.setColor(QtGui.QPalette.ColorRole.HighlightedText, c("#ffffff"))
+    # Selection remains functional for move/remove actions, but has no large
+    # painted row highlight; the grid and cell colors stay visible.
+    pal.setColor(QtGui.QPalette.ColorRole.Highlight,       c(0, 0, 0, 0))
+    pal.setColor(QtGui.QPalette.ColorRole.HighlightedText, c(TEXT))
     pal.setColor(QtGui.QPalette.ColorRole.Link,            c(ACCENT))
     pal.setColor(QtGui.QPalette.ColorRole.PlaceholderText, c(TEXT_DIM))
 
@@ -243,7 +245,7 @@ QTableWidget, QTableView {{
     gridline-color: #38506f;
     border: 1px solid {BORDER};
     border-radius: 11px;
-    selection-background-color: rgba(109, 93, 252, 0.10);
+    selection-background-color: transparent;
     selection-color: {TEXT};
     outline: 0;
     padding: 2px;
@@ -260,9 +262,9 @@ QTableWidget::item:hover, QTableView::item:hover {{
     background: #263a5d;
 }}
 QTableWidget::item:selected, QTableView::item:selected {{
-    /* Keep the highlight very soft so the original cell text/colors stay visible. */
-    background: rgba(109, 93, 252, 0.10);
-    border-bottom: 1px solid rgba(130, 117, 255, 0.32);
+    /* No painted row highlight: selection remains available for actions. */
+    background: transparent;
+    border-bottom: 1px solid transparent;
 }}
 
 QHeaderView::section {{
@@ -270,6 +272,7 @@ QHeaderView::section {{
     color: #dce8ff;
     padding: 10px 9px;
     border: 0;
+    border-right: 1px solid #38506f;
     border-bottom: 2px solid {PRIMARY};
     font-weight: 600;
 }}
