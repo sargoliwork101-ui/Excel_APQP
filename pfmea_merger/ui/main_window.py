@@ -926,7 +926,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for name in pm.list_profiles():
             self.profile_combo.addItem(name)
         # restore last profile
-        target = current or self.app_settings.last_profile or ""
+        # Do not auto-select the last profile on startup. The initial folder
+        # load must remain neutral; the user chooses a profile explicitly.
+        target = current or ""
         if target:
             idx = self.profile_combo.findText(target)
             if idx >= 0:

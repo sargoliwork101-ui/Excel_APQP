@@ -94,16 +94,25 @@ class ProductProfile:
         raw_stations = d.get("stations")
         if raw_stations is None:
             raw_stations = d.get("station_order", [])
-        stations = [StationEntry.from_dict(x) for x in raw_stations]
+        if not isinstance(raw_stations, (list, tuple)):
+            raw_stations = []
+        stations = [StationEntry.from_dict(x) for x in raw_stations
+                    if isinstance(x, (str, dict))]
+        raw_heights = d.get("row_heights", {})
+        if not isinstance(raw_heights, dict):
+            raw_heights = {}
+        raw_hidden = d.get("hidden_stations", [])
+        if not isinstance(raw_hidden, (list, tuple)):
+            raw_hidden = []
         return cls(
             name=d.get("name", ""),
             product_name=d.get("product_name", ""),
             product_code=d.get("product_code", ""),
             template_path=d.get("template_path", ""),
             stations=stations,
-            row_heights={str(k): int(v) for k, v in d.get("row_heights", {}).items()
+            row_heights={str(k): int(v) for k, v in raw_heights.items()
                          if str(v).isdigit() and int(v) > 0},
-            hidden_stations=[str(x) for x in d.get("hidden_stations", [])],
+            hidden_stations=[str(x) for x in raw_hidden],
             settings=settings,
         )
 
