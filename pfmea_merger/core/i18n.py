@@ -121,6 +121,7 @@ STRINGS = {
         "fa": "فایل «{name}» فرمت PFMEA معتبر ندارد و نادیده گرفته شد.",
         "en": "File '{name}' is not a valid PFMEA file and was skipped.",
     },
+    "missing_file": {"fa": "⚠ فایل ورودی موجود نیست", "en": "⚠ Input file missing"},
     "loaded_files": {
         "fa": "{n} فایل بارگذاری شد ({s} ایستگاه).",
         "en": "{n} files loaded ({s} stations).",

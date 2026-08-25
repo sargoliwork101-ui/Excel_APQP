@@ -110,7 +110,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._active_profile_name = ""
         self._profile_snapshot = ""
         self._row_heights: Dict[str, int] = {}
+        self._hidden_stations: set[str] = set()
+        self._missing_opcs: set[str] = set()
+        self._blink_on = False
         self._layout_sync = False
+        self._missing_timer = QtCore.QTimer(self)
+        self._missing_timer.setInterval(550)
+        self._missing_timer.timeout.connect(self._blink_missing_rows)
 
         self._worker: Optional[MergeWorker] = None
         self._last_output: str = ""
@@ -616,6 +622,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
         self.workbooks.clear()
         self.rows.clear()
+        self._missing_opcs.clear()
+        self._missing_timer.stop()
         self._rebuild_table()
         self.status.showMessage("● " + self.tr_.t("ready"))
 
@@ -624,27 +632,50 @@ class MainWindow(QtWidgets.QMainWindow):
                           reverse=True)
         if not rows_idx:
             return
-        for r in rows_idx:
-            if 0 <= r < len(self.rows):
-                del self.rows[r]
-        # If a file no longer has any rows, drop it from workbooks
-        remaining_paths = {r.path for r in self.rows}
-        for p in list(self.workbooks.keys()):
-            if p not in remaining_paths:
-                del self.workbooks[p]
+        removed_codes = set()
+        for index in rows_idx:
+            if 0 <= index < len(self.rows):
+                removed_codes.add(str(self.rows[index].block.opc_code))
+                del self.rows[index]
+        if self._active_profile_name:
+            # Removal is a visibility choice for this profile only. Keep the
+            # workbook loaded so another profile can still use the station.
+            self._hidden_stations.update(removed_codes)
+            self._save_profile_data(self._active_profile_name)
+        else:
+            # Without a profile, retain the old session-only removal behavior.
+            remaining_paths = {r.path for r in self.rows}
+            for path in list(self.workbooks.keys()):
+                if path not in remaining_paths:
+                    del self.workbooks[path]
         self._rebuild_table()
 
     # -------------------------------------------------------- table ui
     def _apply_profile_to_rows(self, profile: pm.ProductProfile) -> None:
-        """Reorder self.rows by profile order and apply enabled states."""
+        """Apply profile visibility/order and add placeholders for missing files."""
         order_map = {s.opc: i for i, s in enumerate(profile.stations)}
         enabled_map = {s.opc: s.enabled for s in profile.stations}
+        self._hidden_stations = set(profile.hidden_stations)
+        self._missing_opcs = set()
+        # Remove stale placeholders once the user loads a real matching file.
+        real_codes = {str(r.block.opc_code) for r in self.rows if r.path}
+        self.rows = [r for r in self.rows if r.path or str(r.block.opc_code) not in real_codes]
+        known_codes = {str(r.block.opc_code) for r in self.rows}
+        for entry in profile.stations:
+            code = str(entry.opc)
+            if code in self._hidden_stations or code in known_codes:
+                continue
+            # Empty path marks a profile station whose input file is absent.
+            self.rows.append(Row("", StationBlock(code, entry.name, 0, -1), enabled=False))
+            self._missing_opcs.add(code)
         for r in self.rows:
             code = str(r.block.opc_code)
             if code in enabled_map:
-                r.enabled = enabled_map[code]
-        # stable sort: known codes first (in profile order), unknown at end
+                r.enabled = enabled_map[code] and code not in self._hidden_stations
+        self.rows = [r for r in self.rows if str(r.block.opc_code) not in self._hidden_stations]
         self.rows.sort(key=lambda r: order_map.get(str(r.block.opc_code), 10_000))
+        if self._missing_opcs:
+            self._missing_timer.start()
 
     def _rebuild_table(self):
         self._layout_sync = True
@@ -739,9 +770,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 row_height = min(320, max(44, 24 + visual_lines * 22))
             self.table.setRowHeight(i, row_height)
 
-            file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)
-            file_item.setToolTip(r.path)
-            file_item.setForeground(QtGui.QColor("#b9c7ff"))
+            file_text = Path(r.path).name if r.path else self.tr_.t("missing_file")
+            file_item = QtWidgets.QTableWidgetItem(file_text)
+            file_item.setToolTip(r.path or self.tr_.t("missing_file"))
+            file_item.setForeground(QtGui.QColor("#ff9a65" if not r.path else "#b9c7ff"))
+            if not r.path:
+                file_item.setBackground(QtGui.QColor("#4a2928"))
             self.table.setItem(i, self.COL_FILE, file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
@@ -799,6 +833,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.count_label.setText(f"انتخاب‌شده: {selected} از {total}")
         else:
             self.count_label.setText(f"Selected: {selected} / {total}")
+
+    def _blink_missing_rows(self):
+        self._blink_on = not self._blink_on
+        for i, row in enumerate(self.rows):
+            if str(row.block.opc_code) not in self._missing_opcs:
+                continue
+            item = self.table.item(i, self.COL_FILE)
+            if item is not None:
+                item.setBackground(QtGui.QColor("#713331" if self._blink_on else "#4a2928"))
+                item.setForeground(QtGui.QColor("#ffd0a8" if self._blink_on else "#ff9a65"))
 
     def _set_all(self, checked: bool):
         for r in self.rows:
@@ -942,6 +986,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if profile.settings:
             self.merge_settings = profile.settings
         self._row_heights = dict(profile.row_heights)
+        # Recreate the full loaded station list before applying this profile;
+        # stations hidden in another profile must remain available here.
+        restored = []
+        for path, analysis in self.workbooks.items():
+            restored.extend(Row(path, block, enabled=True)
+                           for block in analysis.stations)
+        if restored:
+            self.rows = restored
         if profile.stations and self.rows:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()

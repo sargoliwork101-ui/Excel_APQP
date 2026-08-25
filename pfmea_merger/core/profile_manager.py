@@ -56,6 +56,7 @@ class ProductProfile:
     # Optional per-station row heights, keyed by OPC. Kept separate from
     # global settings so every product profile can preserve its own layout.
     row_heights: Dict[str, int] = field(default_factory=dict)
+    hidden_stations: List[str] = field(default_factory=list)
     settings: MergeSettings = field(default_factory=MergeSettings)
 
     # ---- helpers ---------------------------------------------------
@@ -82,6 +83,7 @@ class ProductProfile:
             "template_path": self.template_path,
             "stations": [s.to_dict() for s in self.stations],
             "row_heights": self.row_heights,
+            "hidden_stations": self.hidden_stations,
             "settings": self.settings.to_dict(),
         }
 
@@ -101,6 +103,7 @@ class ProductProfile:
             stations=stations,
             row_heights={str(k): int(v) for k, v in d.get("row_heights", {}).items()
                          if str(v).isdigit() and int(v) > 0},
+            hidden_stations=[str(x) for x in d.get("hidden_stations", [])],
             settings=settings,
         )
 
