@@ -32,7 +32,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         self.setWindowTitle(self.tr_.t("settings_title"))
         self.setLayoutDirection(
-            QtCore.Qt.LayoutDirection.RightToLeft if translator.is_rtl()
+            QtCore.Qt.LayoutDirection.RightToLeft if self.tr_.is_rtl()
             else QtCore.Qt.LayoutDirection.LeftToRight
         )
         self._build_ui()
@@ -66,17 +66,17 @@ class SettingsDialog(QtWidgets.QDialog):
         # Percentage used by the AQ2 formula for the highest RPN values.
         self.rpn_top_percent_spin = QtWidgets.QSpinBox()
         self.rpn_top_percent_spin.setRange(1, 100)
-        self.rpn_top_percent_spin.setSuffix("٪" if translator.is_rtl() else "%")
+        self.rpn_top_percent_spin.setSuffix("٪" if self.tr_.is_rtl() else "%")
 
         self.failure_row_height_spin = QtWidgets.QSpinBox()
         self.failure_row_height_spin.setRange(0, 400)
-        self.failure_row_height_spin.setSuffix(" پیکسل" if translator.is_rtl() else " px")
-        self.failure_row_height_spin.setSpecialValueText("خودکار" if translator.is_rtl() else "Auto")
+        self.failure_row_height_spin.setSuffix(" پیکسل" if self.tr_.is_rtl() else " px")
+        self.failure_row_height_spin.setSpecialValueText("خودکار" if self.tr_.is_rtl() else "Auto")
 
         self.failure_column_width_spin = QtWidgets.QSpinBox()
         self.failure_column_width_spin.setRange(0, 800)
-        self.failure_column_width_spin.setSuffix(" پیکسل" if translator.is_rtl() else " px")
-        self.failure_column_width_spin.setSpecialValueText("خودکار" if translator.is_rtl() else "Auto")
+        self.failure_column_width_spin.setSuffix(" پیکسل" if self.tr_.is_rtl() else " px")
+        self.failure_column_width_spin.setSpecialValueText("خودکار" if self.tr_.is_rtl() else "Auto")
 
         self.opc_col_edit = QtWidgets.QLineEdit()
         self.opc_col_edit.setMaxLength(3)

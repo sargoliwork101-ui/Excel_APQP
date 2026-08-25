@@ -1160,7 +1160,7 @@ class MainWindow(QtWidgets.QMainWindow):
         text.setOpenExternalLinks(True)
         text.setWordWrap(True)
         layout.addWidget(text, 1)
-        close = QtWidgets.QPushButton(self.tr_("ok"))
+        close = QtWidgets.QPushButton(self.tr_.t("ok"))
         close.clicked.connect(dialog.accept)
         layout.addWidget(close, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
         dialog.exec()
@@ -1356,6 +1356,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ----------------------------------------------------- context menu
     def _show_context_menu(self, pos: QtCore.QPoint):
+        # A context-menu request does not always select the row first.
+        # Select the row under the cursor so right-clicking an unselected row
+        # immediately exposes the remove action for that exact row.
+        index = self.table.indexAt(pos)
+        if index.isValid():
+            if not self.table.selectionModel().isRowSelected(index.row(), index.parent()):
+                self.table.clearSelection()
+                self.table.selectRow(index.row())
         rows = self._selected_row_indices()
         if not rows:
             return
