@@ -68,6 +68,10 @@ STRINGS = {
         "fa": "ارتفاع ردیف حالت خرابی (۰ = خودکار):",
         "en": "Failure-mode row height (0 = automatic):",
     },
+    "failure_column_width_lbl": {
+        "fa": "عرض ستون حالت خرابی (۰ = خودکار):",
+        "en": "Failure-mode column width (0 = automatic):",
+    },
     "ok": {"fa": "تایید", "en": "OK"},
     "cancel": {"fa": "انصراف", "en": "Cancel"},
 

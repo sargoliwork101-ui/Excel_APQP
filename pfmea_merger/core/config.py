@@ -48,8 +48,10 @@ class MergeSettings:
     footer_markers: List[str] = field(default_factory=lambda: list(DEFAULT_FOOTER_MARKERS))
     max_opc_length: int = DEFAULT_MAX_OPC_LEN
     rpn_top_percent: int = DEFAULT_RPN_TOP_PERCENT
-    # 0 means automatic height based on wrapped failure-mode text.
+    # 0 means automatic sizing based on wrapped failure-mode text.
     failure_row_height: int = 0
+    # 0 means automatic width based on the longest displayed mode.
+    failure_column_width: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)

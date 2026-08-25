@@ -260,10 +260,10 @@ QTableWidget::item:hover, QTableView::item:hover {{
     background: #263a5d;
 }}
 QTableWidget::item:selected, QTableView::item:selected {{
-    /* Soft 20% selection so cell text and failure-mode colors remain visible. */
-    background: rgba(109, 93, 252, 0.20);
+    /* More opaque than the old 20% highlight, but still keeps cell colors visible. */
+    background: rgba(109, 93, 252, 0.38);
     color: {TEXT};
-    border-bottom: 1px solid rgba(130, 117, 255, 0.55);
+    border-bottom: 1px solid rgba(130, 117, 255, 0.70);
 }}
 
 QHeaderView::section {{

@@ -597,6 +597,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self._suspend_checks = True
         self.table.blockSignals(True)
         self.table.setRowCount(len(self.rows))
+
+        # Let the failure-mode column adapt to its content, while respecting
+        # the available window space. A non-zero setting gives the user a
+        # fixed width instead.
+        manual_width = int(getattr(self.merge_settings, "failure_column_width", 0))
+        if manual_width > 0:
+            failure_width = manual_width
+        else:
+            metrics = QtGui.QFontMetrics(self.table.font())
+            longest = max(
+                (metrics.horizontalAdvance(line)
+                 for r in self.rows
+                 for mode in r.block.failure_modes
+                 for line in mode.splitlines()),
+                default=0,
+            )
+            desired = max(290, min(620, longest + 34))
+            available = self.table.viewport().width()
+            failure_width = min(desired, max(290, int(available * 0.48))) if available > 0 else desired
+        self.table.setColumnWidth(self.COL_ROWS, failure_width)
+
         for i, r in enumerate(self.rows):
             chk = QtWidgets.QTableWidgetItem()
             # Use a text checkbox so the complete cell responds to a click.
@@ -653,8 +674,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Estimate wrapped lines using the current failure-mode
                 # column width. This is more accurate than counting rows,
                 # because a long mode may occupy several visual lines.
+                chars_per_line = max(20, int(failure_width / 8))
                 visual_lines = sum(
-                    max(1, (len(mode) + 42) // 43)
+                    max(1, (len(mode) + chars_per_line - 1) // chars_per_line)
                     for mode in r.block.failure_modes
                 ) or 1
                 row_height = min(320, max(44, 24 + visual_lines * 22))
