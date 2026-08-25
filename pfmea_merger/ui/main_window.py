@@ -1055,7 +1055,9 @@ class MainWindow(QtWidgets.QMainWindow):
         pm.save_profile(pm.ProductProfile(
             name=name, product_name=product_name, product_code=product_code,
             template_path=self.template_edit.text(), stations=stations,
-            row_heights=dict(self._row_heights), settings=self.merge_settings,
+            row_heights=dict(self._row_heights),
+            hidden_stations=sorted(self._hidden_stations),
+            settings=self.merge_settings,
         ))
         self._profile_snapshot = self._current_profile_signature()
 
@@ -1063,12 +1065,12 @@ class MainWindow(QtWidgets.QMainWindow):
         name = self.profile_combo.currentText().strip()
         if not name:
             QtWidgets.QMessageBox.information(
-                self, self.tr_("info"), self.tr_("no_profile_selected"))
+                self, self.tr_.t("info"), self.tr_.t("no_profile_selected"))
             return
         if not self._load_profile_by_name(name):
             QtWidgets.QMessageBox.warning(
-                self, self.tr_("warning"),
-                self.tr_("profile_missing", name=name))
+                self, self.tr_.t("warning"),
+                self.tr_.t("profile_missing", name=name))
             return
         self._active_profile_name = name
         self.app_settings.last_profile = name
@@ -1332,12 +1334,24 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 if not profile_selections:
                     continue
+                # Keep Persian profile names readable in the output file
+                # name (the raw-string unicode range must stay single-
+                # escaped, like profile_manager._SAFE, or every Persian
+                # letter collapses to "_" and different profiles collide).
                 safe_name = re.sub(
-                    r"[^A-Za-z0-9_\\-\\u0600-\\u06FF ]+", "_", profile_name
-                ).strip() or "profile"
+                    r"[^A-Za-z0-9_\-\u0600-\u06FF ]+", "_", profile_name
+                ).strip()[:80] or "profile"
                 profile_output = str(Path(output).with_name(
                     f"{Path(output).stem}_{safe_name}{Path(output).suffix}"
                 ))
+                # Guard against two profiles still sanitizing to the same
+                # name: the second job would silently overwrite the first.
+                suffix = 2
+                while profile_output in {job[2] for job in jobs}:
+                    profile_output = str(Path(output).with_name(
+                        f"{Path(output).stem}_{safe_name}_{suffix}{Path(output).suffix}"
+                    ))
+                    suffix += 1
                 jobs.append((template, profile_selections, profile_output,
                              profile.settings, self.history_chk.isChecked()))
             if not jobs:

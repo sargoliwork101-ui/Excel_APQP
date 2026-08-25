@@ -311,44 +311,89 @@ def _attach_template_drawing(output_path: str, template_path: str) -> None:
     try:
         with zipfile.ZipFile(template_path, "r") as src, zipfile.ZipFile(output_path, "r") as out:
             names = set(src.namelist())
+            out_names = set(out.namelist())
+            # openpyxl already wrote its own drawings (e.g. copied images):
+            # attaching the template part on top would duplicate ZIP entries.
+            if any(n.startswith("xl/drawings/") for n in out_names):
+                return
             drawing_names = [n for n in names if n.startswith("xl/drawings/drawing") and n.endswith(".xml")]
             if not drawing_names:
                 return
             drawing = sorted(drawing_names)[0]
+            drawing_base = drawing.rsplit("/", 1)[-1]          # drawing1.xml
             drawing_rels = drawing.replace("xl/drawings/", "xl/drawings/_rels/") + ".rels"
             media_names = [n for n in names if n.startswith("xl/media/")]
             sheet_name = "xl/worksheets/sheet1.xml"
             sheet_rels = "xl/worksheets/_rels/sheet1.xml.rels"
             sheet_xml = out.read(sheet_name).decode("utf-8")
-            if "xmlns:r=" not in sheet_xml:
-                sheet_xml = sheet_xml.replace(
-                    "<worksheet ",
-                    '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ',
-                    1,
-                )
+
+            # Merge the drawing relationship into the sheet's existing .rels
+            # instead of replacing them: copied hyperlinks already reference
+            # rId entries there, and dropping them corrupts the output.
+            existing_rels = None
+            if sheet_rels in out_names:
+                existing_rels = out.read(sheet_rels).decode("utf-8")
+                if "relationships/drawing" in existing_rels:
+                    return  # a drawing relationship is already wired up
+            used_ids = [int(m) for m in re.findall(r'Id="rId(\d+)"', existing_rels or "")]
+            rel_id = f"rId{max(used_ids, default=0) + 1}"
+            rel_entry = (
+                f'<Relationship Id="{rel_id}" '
+                f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '
+                f'Target="../drawings/{drawing_base}"/>'
+            )
+            if existing_rels:
+                rels_xml = existing_rels.replace("</Relationships>", rel_entry + "</Relationships>")
+            else:
+                rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                            + rel_entry + '</Relationships>')
+
             if "<drawing " not in sheet_xml:
-                sheet_xml = sheet_xml.replace("</worksheet>", '<drawing r:id="rId2"/></worksheet>')
-            rels_xml = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-                        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" '
-                        'Target="../drawings/drawing1.xml"/></Relationships>')
+                # <drawing> must precede tableParts/extLst when they exist.
+                insert_at = len(sheet_xml)
+                for tag in ("<tableParts", "<extLst", "</worksheet>"):
+                    pos = sheet_xml.find(tag)
+                    if pos != -1:
+                        insert_at = min(insert_at, pos)
+                # Declare xmlns:r inline: the worksheet root may not carry it
+                # (openpyxl only declares namespaces where it needs them).
+                drawing_tag = (
+                    '<drawing xmlns:r="http://schemas.openxmlformats.org/'
+                    f'officeDocument/2006/relationships" r:id="{rel_id}"/>')
+                sheet_xml = sheet_xml[:insert_at] + drawing_tag + sheet_xml[insert_at:]
+
             content = out.read("[Content_Types].xml").decode("utf-8")
-            if 'Extension="png"' not in content:
-                content = content.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>')
-            if 'PartName="/xl/drawings/drawing1.xml"' not in content:
-                content = content.replace("</Types>", '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>')
+            # Carry over the template's own media declarations (jpg/jpeg
+            # MIME differences etc.) for every media part we copy.
+            tpl_defaults = dict(
+                (m.group(1).lower(), m.group(2))
+                for m in re.finditer(
+                    r'<Default Extension="([^"]+)" ContentType="([^"]+)"',
+                    src.read("[Content_Types].xml").decode("utf-8")))
+            media_exts = {Path(m).suffix.lstrip(".").lower() for m in media_names}
+            media_exts.discard("")
+            for ext in sorted(media_exts):
+                if f'Extension="{ext}"' not in content:
+                    mime = tpl_defaults.get(ext, f"image/{ext}")
+                    content = content.replace(
+                        "</Types>", f'<Default Extension="{ext}" ContentType="{mime}"/></Types>')
+            if f'PartName="/{drawing}"' not in content:
+                content = content.replace(
+                    "</Types>",
+                    f'<Override PartName="/{drawing}" '
+                    f'ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>')
             with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx", dir=str(Path(output_path).parent)) as tmp:
                 temp_name = tmp.name
             try:
                 with zipfile.ZipFile(temp_name, "w", zipfile.ZIP_DEFLATED) as new:
-                    has_sheet_rels = False
                     for item in out.infolist():
-                        data = sheet_xml.encode() if item.filename == sheet_name else content.encode() if item.filename == "[Content_Types].xml" else out.read(item.filename)
-                        if item.filename == sheet_rels:
-                            has_sheet_rels = True
-                            data = rels_xml.encode()
+                        data = (sheet_xml.encode() if item.filename == sheet_name
+                                else content.encode() if item.filename == "[Content_Types].xml"
+                                else rels_xml.encode() if item.filename == sheet_rels
+                                else out.read(item.filename))
                         new.writestr(item, data)
-                    if not has_sheet_rels:
+                    if sheet_rels not in out_names:
                         new.writestr(sheet_rels, rels_xml.encode())
                     new.writestr(drawing, src.read(drawing))
                     if drawing_rels in names:
