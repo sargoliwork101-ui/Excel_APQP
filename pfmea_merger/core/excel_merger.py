@@ -188,6 +188,23 @@ def _copy_whole_sheet(src_ws: Worksheet, dst_ws: Worksheet) -> None:
 _last_non_empty_row = last_non_empty_row
 
 
+def _rewrite_so_rpn_formulas(ws: Worksheet, data_start: int, data_end: int) -> None:
+    """Write SO and RPN formulas explicitly for every merged data row."""
+    from openpyxl.cell.cell import MergedCell
+    for row in range(data_start, data_end + 1):
+        # E = Severity, H = Occurrence, L = Detection, I = SO, M = RPN.
+        # Do not trust formulas copied from source files: after rows are moved
+        # their references can point to the old source row.
+        so_cell = ws.cell(row=row, column=9)
+        rpn_cell = ws.cell(row=row, column=13)
+        # Some PFMEA templates merge the first station's descriptive row
+        # across C:V, which makes I/M read-only MergedCell placeholders.
+        if not isinstance(so_cell, MergedCell):
+            so_cell.value = f"=H{row}*E{row}"
+        if not isinstance(rpn_cell, MergedCell):
+            rpn_cell.value = f"=L{row}*H{row}*E{row}"
+
+
 def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
                         percent: int) -> None:
     """Update the template's AQ2 top-RPN formula for the merged data range."""
@@ -351,6 +368,7 @@ def merge_pfmea(
     # AQ2 is a template formula, so its source range and percentage must be
     # recalculated for the rows that actually made it into this output.
     data_end = write_row - 1
+    _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end)
     _update_rpn_formula(
         out_ws, settings.data_start_row, data_end,
         max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
