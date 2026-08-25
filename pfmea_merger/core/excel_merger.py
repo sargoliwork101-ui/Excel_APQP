@@ -31,18 +31,24 @@ from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last
 # helpers to copy formatting
 
 def _copy_cell(src_cell, dst_cell) -> None:
-    """Copy value + style + hyperlink from src to dst efficiently.
+    """Copy value + style + hyperlink with IDs remapped to the output book.
 
-    Assigning the complete internal style once is considerably faster than
-    copying font/fill/border/alignment/protection separately for every cell,
-    and preserves the exact same formatting without changing the output.
+    A complete ``_style`` assignment is tempting but unsafe here: style IDs
+    belong to the source workbook's font/fill/alignment tables. Assigning the
+    public components lets openpyxl register equivalent styles in the output
+    workbook and prevents corrupt files and IndexError on save.
     """
     dst_cell.value = src_cell.value
     if src_cell.has_style:
-        dst_cell._style = copy(src_cell._style)
+        dst_cell.font = copy(src_cell.font)
+        dst_cell.fill = copy(src_cell.fill)
+        dst_cell.border = copy(src_cell.border)
+        dst_cell.alignment = copy(src_cell.alignment)
+        dst_cell.number_format = src_cell.number_format
+        dst_cell.protection = copy(src_cell.protection)
     if src_cell.hyperlink:
         try:
-            dst_cell._hyperlink = copy(src_cell._hyperlink)
+            dst_cell.hyperlink = copy(src_cell.hyperlink)
         except Exception:
             pass
     # Comments on merged cells break the file, so skip them.
@@ -175,8 +181,11 @@ def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
         return
     cell = ws["AQ2"]
     old = cell.value
-    if isinstance(old, str) and old.startswith("="):
-        formula = old
+    # openpyxl 3.1 reads the template's AQ2 as an ArrayFormula object.
+    # Work with its text while retaining the array-formula representation.
+    old_text = getattr(old, "text", old)
+    if isinstance(old_text, str) and old_text.startswith("="):
+        formula = old_text
         # Keep the template's function/version, but never leave its stale
         # M10:M901 range in the merged workbook.
         # Preserve the template's first RPN row (the supplied template uses
@@ -189,7 +198,14 @@ def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
         # retaining any future formula structure around it.
         formula = re.sub(r"\*\s*0(?:\.\d+)?", f"*{percent / 100:g}", formula,
                          count=1)
-        cell.value = formula
+        if hasattr(old, "text"):
+            try:
+                from openpyxl.worksheet.formula import ArrayFormula
+                cell.value = ArrayFormula(ref=getattr(old, "ref", "AQ2"), text=formula)
+            except Exception:
+                cell.value = formula
+        else:
+            cell.value = formula
     else:
         end = max(data_end, data_start)
         factor = percent / 100
