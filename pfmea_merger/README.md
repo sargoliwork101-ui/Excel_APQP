@@ -128,3 +128,13 @@ pyinstaller --noconfirm --windowed --name "PFMEA_Merger" \
     --add-data "pfmea_merger/templates;pfmea_merger/templates" \
     pfmea_merger/app.py
 ```
+
+## Dual PFMEA + CP prototype
+
+برای تست نمونه دوگانه PFMEA و Control Plan:
+
+```powershell
+python -m pfmea_merger.dual_app
+```
+
+این نمونه دو Template جدا، دو پوشه فایل، دو Checkbox مستقل برای هر ایستگاه و دو خروجی مستقل می‌سازد. پروفایل انتخاب‌شده برای ترتیب ایستگاه‌ها مشترک است.

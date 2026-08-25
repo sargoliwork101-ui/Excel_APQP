@@ -30,19 +30,25 @@ class StationEntry:
     opc: str
     name: str = ""
     enabled: bool = True
+    pfmea_enabled: bool | None = None
+    cp_enabled: bool | None = None
 
     def to_dict(self) -> dict:
-        return {"opc": self.opc, "name": self.name, "enabled": self.enabled}
+        return {"opc": self.opc, "name": self.name, "enabled": self.enabled,
+                "pfmea_enabled": self.pfmea_enabled if self.pfmea_enabled is not None else self.enabled,
+                "cp_enabled": self.cp_enabled if self.cp_enabled is not None else self.enabled}
 
     @classmethod
     def from_dict(cls, d) -> "StationEntry":
         if isinstance(d, str):
             # backwards compat: old profiles stored plain strings
             return cls(opc=d, name="", enabled=True)
+        enabled = bool(d.get("enabled", True))
         return cls(
-            opc=str(d.get("opc", "")),
-            name=str(d.get("name", "")),
-            enabled=bool(d.get("enabled", True)),
+            opc=str(d.get("opc", "")), name=str(d.get("name", "")),
+            enabled=enabled,
+            pfmea_enabled=bool(d.get("pfmea_enabled", enabled)),
+            cp_enabled=bool(d.get("cp_enabled", enabled)),
         )
 
 
