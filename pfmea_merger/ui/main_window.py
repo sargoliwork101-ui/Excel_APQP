@@ -224,7 +224,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(self.COL_ROWS,  75)
         self.table.verticalHeader().setDefaultSectionSize(30)
         self.table.itemChanged.connect(self._on_table_item_changed)
-        # Double-click a row toggles its check
+        # The whole USE cell is clickable (not only the native checkbox).
+        self.table.cellClicked.connect(self._on_use_cell_clicked)
+        # Double-clicking the file column opens that input workbook.
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         # Right-click context menu
         self.table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
@@ -562,15 +564,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setRowCount(len(self.rows))
         for i, r in enumerate(self.rows):
             chk = QtWidgets.QTableWidgetItem()
+            # Use a text checkbox so the complete cell responds to a click.
+            # A native QTableWidget checkbox only responds to its tiny box.
             chk.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                | QtCore.Qt.ItemFlag.ItemIsEnabled
+                QtCore.Qt.ItemFlag.ItemIsEnabled
                 | QtCore.Qt.ItemFlag.ItemIsSelectable
             )
-            chk.setCheckState(
-                QtCore.Qt.CheckState.Checked if r.enabled
-                else QtCore.Qt.CheckState.Unchecked
-            )
+            chk.setText("☑" if r.enabled else "☐")
+            chk.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
             chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(i, self.COL_USE, chk)
 
@@ -599,29 +600,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_counts()
 
     def _on_table_item_changed(self, item: QtWidgets.QTableWidgetItem):
-        if self._suspend_checks:
-            return
-        if item.column() != self.COL_USE:
+        # Kept for compatibility with older table items/profiles. Current USE
+        # cells are deliberately non-native checkboxes; cellClicked is used so
+        # the user can click anywhere in the cell.
+        if self._suspend_checks or item.column() != self.COL_USE:
             return
         row = item.row()
         if 0 <= row < len(self.rows):
-            self.rows[row].enabled = (
-                item.checkState() == QtCore.Qt.CheckState.Checked
-            )
+            value = item.data(QtCore.Qt.ItemDataRole.UserRole)
+            if isinstance(value, bool):
+                self.rows[row].enabled = value
+        self._update_counts()
+
+    def _on_use_cell_clicked(self, row: int, col: int):
+        """Toggle a station by clicking anywhere in its USE cell."""
+        if col != self.COL_USE or not (0 <= row < len(self.rows)):
+            return
+        self.rows[row].enabled = not self.rows[row].enabled
+        it = self.table.item(row, self.COL_USE)
+        if it is not None:
+            self._suspend_checks = True
+            it.setText("☑" if self.rows[row].enabled else "☐")
+            it.setData(QtCore.Qt.ItemDataRole.UserRole, self.rows[row].enabled)
+            self._suspend_checks = False
         self._update_counts()
 
     def _on_cell_double_clicked(self, row: int, col: int):
-        if 0 <= row < len(self.rows):
-            self.rows[row].enabled = not self.rows[row].enabled
-            it = self.table.item(row, self.COL_USE)
-            if it:
-                self._suspend_checks = True
-                it.setCheckState(
-                    QtCore.Qt.CheckState.Checked if self.rows[row].enabled
-                    else QtCore.Qt.CheckState.Unchecked
-                )
-                self._suspend_checks = False
-                self._update_counts()
+        """Open an input workbook when its file cell is double-clicked."""
+        if col != self.COL_FILE or not (0 <= row < len(self.rows)):
+            return
+        path = self.rows[row].path
+        if Path(path).exists():
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
 
     def _update_counts(self):
         total = len(self.rows)
@@ -646,10 +656,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for i, r in enumerate(self.rows):
             it = self.table.item(i, self.COL_USE)
             if it:
-                it.setCheckState(
-                    QtCore.Qt.CheckState.Checked if r.enabled
-                    else QtCore.Qt.CheckState.Unchecked
-                )
+                it.setText("☑" if r.enabled else "☐")
+                it.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
         self._suspend_checks = False
         self._update_counts()
 

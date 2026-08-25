@@ -60,6 +60,10 @@ STRINGS = {
         "fa": "کلیدواژه‌های پاورقی (هرکدام در یک خط):",
         "en": "Footer marker keywords (one per line):",
     },
+    "max_opc_length_lbl": {
+        "fa": "حداکثر طول کد ایستگاه (پیش‌فرض ۲۰):",
+        "en": "Maximum station-code length (default 20):",
+    },
     "ok": {"fa": "تایید", "en": "OK"},
     "cancel": {"fa": "انصراف", "en": "Cancel"},
 
