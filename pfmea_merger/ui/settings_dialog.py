@@ -61,7 +61,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self.header_rows_spin.setRange(1, 50)
 
         self.data_start_spin = QtWidgets.QSpinBox()
-        self.data_start_spin.setRange(1, 100)
+        self.data_start_spin.setRange(1, 10000)
+        self.template_header_start_spin = QtWidgets.QSpinBox(); self.template_header_start_spin.setRange(1, 10000)
+        self.template_header_end_spin = QtWidgets.QSpinBox(); self.template_header_end_spin.setRange(0, 10000); self.template_header_end_spin.setSpecialValueText("خودکار" if self.tr_.is_rtl() else "Auto")
+        self.template_footer_start_spin = QtWidgets.QSpinBox(); self.template_footer_start_spin.setRange(0, 10000); self.template_footer_start_spin.setSpecialValueText("خودکار" if self.tr_.is_rtl() else "Auto")
+        self.template_footer_end_spin = QtWidgets.QSpinBox(); self.template_footer_end_spin.setRange(0, 10000); self.template_footer_end_spin.setSpecialValueText("آخرین ردیف" if self.tr_.is_rtl() else "Last row")
 
         # Percentage used by the AQ2 formula for the highest RPN values.
         self.rpn_top_percent_spin = QtWidgets.QSpinBox()
@@ -114,6 +118,10 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("history_sheet_lbl"), self.history_edit)
         form.addRow(self.tr_.t("header_rows_lbl"), self.header_rows_spin)
         form.addRow(self.tr_.t("data_start_row_lbl"), self.data_start_spin)
+        form.addRow("شروع هدر Template / Template header start", self.template_header_start_spin)
+        form.addRow("پایان هدر Template / Template header end", self.template_header_end_spin)
+        form.addRow("شروع فوتر Template / Template footer start", self.template_footer_start_spin)
+        form.addRow("پایان فوتر Template / Template footer end", self.template_footer_end_spin)
         form.addRow(self.tr_.t("rpn_top_percent_lbl"), self.rpn_top_percent_spin)
         form.addRow(self.tr_.t("failure_row_height_lbl"), self.failure_row_height_spin)
         form.addRow(self.tr_.t("failure_column_width_lbl"), self.failure_column_width_spin)
@@ -153,6 +161,10 @@ class SettingsDialog(QtWidgets.QDialog):
     def _load_values(self):
         self.header_rows_spin.setValue(self.merge_settings.header_rows)
         self.data_start_spin.setValue(self.merge_settings.data_start_row)
+        self.template_header_start_spin.setValue(self.merge_settings.template_header_start)
+        self.template_header_end_spin.setValue(self.merge_settings.template_header_end)
+        self.template_footer_start_spin.setValue(self.merge_settings.template_footer_start)
+        self.template_footer_end_spin.setValue(self.merge_settings.template_footer_end)
         self.rpn_top_percent_spin.setValue(self.merge_settings.rpn_top_percent)
         self.failure_row_height_spin.setValue(self.merge_settings.failure_row_height)
         self.failure_column_width_spin.setValue(self.merge_settings.failure_column_width)
@@ -186,6 +198,10 @@ class SettingsDialog(QtWidgets.QDialog):
     def apply_to(self) -> tuple[MergeSettings, AppSettings]:
         self.merge_settings.header_rows = self.header_rows_spin.value()
         self.merge_settings.data_start_row = self.data_start_spin.value()
+        self.merge_settings.template_header_start = self.template_header_start_spin.value()
+        self.merge_settings.template_header_end = self.template_header_end_spin.value()
+        self.merge_settings.template_footer_start = self.template_footer_start_spin.value()
+        self.merge_settings.template_footer_end = self.template_footer_end_spin.value()
         self.merge_settings.rpn_top_percent = self.rpn_top_percent_spin.value()
         self.merge_settings.failure_row_height = self.failure_row_height_spin.value()
         self.merge_settings.failure_column_width = self.failure_column_width_spin.value()

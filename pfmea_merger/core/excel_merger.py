@@ -415,8 +415,13 @@ def merge_pfmea(
     tpl_ws = template_wb[tpl_sheet_name]
 
     tpl_analysis = analyze_workbook(template_path, settings)
-    tpl_footer_start = tpl_analysis.footer_start_row
-    tpl_footer_end = _last_non_empty_row(tpl_ws)
+    tpl_footer_start = (settings.template_footer_start or tpl_analysis.footer_start_row)
+    tpl_footer_end = settings.template_footer_end or _last_non_empty_row(tpl_ws)
+    tpl_header_start = settings.template_header_start or 1
+    tpl_header_end = settings.template_header_end or settings.header_rows
+    if tpl_header_start > tpl_header_end or tpl_footer_start and tpl_footer_start <= tpl_header_end:
+        template_wb.close()
+        raise ValueError("Template header/footer row ranges are invalid")
     max_col = tpl_ws.max_column
 
     # ---- build the output workbook and copy header ------------------------
@@ -437,7 +442,8 @@ def merge_pfmea(
     _copy_images(tpl_ws, out_ws)
 
     report(5, "Copying header...")
-    _copy_row_range(tpl_ws, out_ws, 1, settings.header_rows, 1, max_col)
+    _copy_row_range(tpl_ws, out_ws, tpl_header_start, tpl_header_end,
+                    1, max_col)
 
     # ---- copy each selected station ---------------------------------------
     write_row = settings.header_rows + 1

@@ -42,6 +42,11 @@ class MergeSettings:
     """Per-product / per-template merge settings."""
     header_rows: int = DEFAULT_HEADER_ROWS
     data_start_row: int = DEFAULT_DATA_START_ROW
+    # Explicit template ranges. Zero means use the legacy automatic rules.
+    template_header_start: int = 1
+    template_header_end: int = 0
+    template_footer_start: int = 0
+    template_footer_end: int = 0
     opc_column: int = DEFAULT_OPC_COLUMN
     name_column: int = DEFAULT_NAME_COLUMN
     failure_mode_column: int = 3
@@ -71,7 +76,8 @@ class MergeSettings:
         values = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
         if not isinstance(values.get("footer_markers", []), list):
             values["footer_markers"] = list(DEFAULT_FOOTER_MARKERS)
-        for key in ("header_rows", "data_start_row", "opc_column", "name_column",
+        for key in ("header_rows", "data_start_row", "template_header_start", "template_header_end",
+                    "template_footer_start", "template_footer_end", "opc_column", "name_column",
                     "failure_mode_column", "so_column", "rpn_column",
                     "max_opc_length", "rpn_top_percent", "failure_row_height",
                     "failure_column_width"):
