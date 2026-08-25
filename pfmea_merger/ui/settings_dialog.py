@@ -68,6 +68,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self.rpn_top_percent_spin.setRange(1, 100)
         self.rpn_top_percent_spin.setSuffix("٪" if translator.is_rtl() else "%")
 
+        self.failure_row_height_spin = QtWidgets.QSpinBox()
+        self.failure_row_height_spin.setRange(0, 400)
+        self.failure_row_height_spin.setSuffix(" پیکسل" if translator.is_rtl() else " px")
+        self.failure_row_height_spin.setSpecialValueText("خودکار" if translator.is_rtl() else "Auto")
+
         self.opc_col_edit = QtWidgets.QLineEdit()
         self.opc_col_edit.setMaxLength(3)
         self.opc_col_edit.setFixedWidth(80)
@@ -92,6 +97,7 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("header_rows_lbl"), self.header_rows_spin)
         form.addRow(self.tr_.t("data_start_row_lbl"), self.data_start_spin)
         form.addRow(self.tr_.t("rpn_top_percent_lbl"), self.rpn_top_percent_spin)
+        form.addRow(self.tr_.t("failure_row_height_lbl"), self.failure_row_height_spin)
         form.addRow(self.tr_.t("opc_col_lbl"), self.opc_col_edit)
         form.addRow(self.tr_.t("name_col_lbl"), self.name_col_edit)
         form.addRow(self.tr_.t("footer_markers_lbl"), self.footer_edit)
@@ -114,6 +120,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.header_rows_spin.setValue(self.merge_settings.header_rows)
         self.data_start_spin.setValue(self.merge_settings.data_start_row)
         self.rpn_top_percent_spin.setValue(self.merge_settings.rpn_top_percent)
+        self.failure_row_height_spin.setValue(self.merge_settings.failure_row_height)
         self.opc_col_edit.setText(_col_to_letter(self.merge_settings.opc_column))
         self.name_col_edit.setText(_col_to_letter(self.merge_settings.name_column))
         self.sheet_edit.setText(self.merge_settings.sheet_name)
@@ -127,6 +134,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self.merge_settings.header_rows = self.header_rows_spin.value()
         self.merge_settings.data_start_row = self.data_start_spin.value()
         self.merge_settings.rpn_top_percent = self.rpn_top_percent_spin.value()
+        self.merge_settings.failure_row_height = self.failure_row_height_spin.value()
         self.merge_settings.opc_column = _letter_to_col(self.opc_col_edit.text())
         self.merge_settings.name_column = _letter_to_col(self.name_col_edit.text())
         self.merge_settings.sheet_name = self.sheet_edit.text().strip() or "PFMEA"

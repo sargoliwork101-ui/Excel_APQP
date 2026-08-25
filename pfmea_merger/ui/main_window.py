@@ -635,8 +635,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtCore.Qt.ItemDataRole.UserRole,
                 len(r.block.failure_modes),
             )
-            rows_item.setForeground(QtGui.QColor("#d8e7f7"))
-            rows_item.setBackground(QtGui.QColor("#19334a"))
+            # Burgundy accent reserved for the failure-mode content.
+            rows_item.setForeground(QtGui.QColor("#e58a9c"))
+            rows_item.setBackground(QtGui.QColor("#422331"))
             rows_item.setTextAlignment(
                 QtCore.Qt.AlignmentFlag.AlignLeft
                 | QtCore.Qt.AlignmentFlag.AlignTop
@@ -645,7 +646,19 @@ class MainWindow(QtWidgets.QMainWindow):
             # Give every failure mode its own readable line. The cap prevents
             # one unusually large file from making the whole table unusable.
             mode_count = len(r.block.failure_modes)
-            self.table.setRowHeight(i, min(260, max(42, 28 + mode_count * 24)))
+            manual_height = int(getattr(self.merge_settings, "failure_row_height", 0))
+            if manual_height > 0:
+                row_height = manual_height
+            else:
+                # Estimate wrapped lines using the current failure-mode
+                # column width. This is more accurate than counting rows,
+                # because a long mode may occupy several visual lines.
+                visual_lines = sum(
+                    max(1, (len(mode) + 42) // 43)
+                    for mode in r.block.failure_modes
+                ) or 1
+                row_height = min(320, max(44, 24 + visual_lines * 22))
+            self.table.setRowHeight(i, row_height)
 
             file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)
             file_item.setToolTip(r.path)

@@ -260,9 +260,10 @@ QTableWidget::item:hover, QTableView::item:hover {{
     background: #263a5d;
 }}
 QTableWidget::item:selected, QTableView::item:selected {{
-    background: {SEL_BG};
-    color: white;
-    border-bottom: 1px solid #7770ff;
+    /* Soft 20% selection so cell text and failure-mode colors remain visible. */
+    background: rgba(109, 93, 252, 0.20);
+    color: {TEXT};
+    border-bottom: 1px solid rgba(130, 117, 255, 0.55);
 }}
 
 QHeaderView::section {{

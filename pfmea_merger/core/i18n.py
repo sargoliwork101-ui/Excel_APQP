@@ -64,6 +64,10 @@ STRINGS = {
         "fa": "درصد RPNهای بالاتر (پیش‌فرض ۲۰٪):",
         "en": "Top RPN percentage (default 20%):",
     },
+    "failure_row_height_lbl": {
+        "fa": "ارتفاع ردیف حالت خرابی (۰ = خودکار):",
+        "en": "Failure-mode row height (0 = automatic):",
+    },
     "ok": {"fa": "تایید", "en": "OK"},
     "cancel": {"fa": "انصراف", "en": "Cancel"},
 
