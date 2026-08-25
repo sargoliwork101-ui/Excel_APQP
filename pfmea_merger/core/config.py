@@ -24,6 +24,7 @@ DEFAULT_FOOTER_MARKERS = [
     "کد فرم",
 ]
 DEFAULT_MAX_OPC_LEN = 20    # anything longer in column A is probably not an OPC code
+DEFAULT_RPN_TOP_PERCENT = 20  # percentage of highest RPN values highlighted
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = APP_ROOT / "profiles"
@@ -46,6 +47,7 @@ class MergeSettings:
     history_sheet: str = DEFAULT_HISTORY_SHEET
     footer_markers: List[str] = field(default_factory=lambda: list(DEFAULT_FOOTER_MARKERS))
     max_opc_length: int = DEFAULT_MAX_OPC_LEN
+    rpn_top_percent: int = DEFAULT_RPN_TOP_PERCENT
 
     def to_dict(self) -> dict:
         return asdict(self)

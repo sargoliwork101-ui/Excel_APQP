@@ -63,11 +63,10 @@ class SettingsDialog(QtWidgets.QDialog):
         self.data_start_spin = QtWidgets.QSpinBox()
         self.data_start_spin.setRange(1, 100)
 
-        # Used while detecting station/OPC rows. 20 is the current default,
-        # but different PFMEA templates may use longer identifiers.
-        self.max_opc_length_spin = QtWidgets.QSpinBox()
-        self.max_opc_length_spin.setRange(1, 200)
-        self.max_opc_length_spin.setSuffix(" کاراکتر" if translator.is_rtl() else " chars")
+        # Percentage used by the AQ2 formula for the highest RPN values.
+        self.rpn_top_percent_spin = QtWidgets.QSpinBox()
+        self.rpn_top_percent_spin.setRange(1, 100)
+        self.rpn_top_percent_spin.setSuffix("٪" if translator.is_rtl() else "%")
 
         self.opc_col_edit = QtWidgets.QLineEdit()
         self.opc_col_edit.setMaxLength(3)
@@ -92,7 +91,7 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("history_sheet_lbl"), self.history_edit)
         form.addRow(self.tr_.t("header_rows_lbl"), self.header_rows_spin)
         form.addRow(self.tr_.t("data_start_row_lbl"), self.data_start_spin)
-        form.addRow(self.tr_.t("max_opc_length_lbl"), self.max_opc_length_spin)
+        form.addRow(self.tr_.t("rpn_top_percent_lbl"), self.rpn_top_percent_spin)
         form.addRow(self.tr_.t("opc_col_lbl"), self.opc_col_edit)
         form.addRow(self.tr_.t("name_col_lbl"), self.name_col_edit)
         form.addRow(self.tr_.t("footer_markers_lbl"), self.footer_edit)
@@ -114,7 +113,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def _load_values(self):
         self.header_rows_spin.setValue(self.merge_settings.header_rows)
         self.data_start_spin.setValue(self.merge_settings.data_start_row)
-        self.max_opc_length_spin.setValue(self.merge_settings.max_opc_length)
+        self.rpn_top_percent_spin.setValue(self.merge_settings.rpn_top_percent)
         self.opc_col_edit.setText(_col_to_letter(self.merge_settings.opc_column))
         self.name_col_edit.setText(_col_to_letter(self.merge_settings.name_column))
         self.sheet_edit.setText(self.merge_settings.sheet_name)
@@ -127,7 +126,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def apply_to(self) -> tuple[MergeSettings, AppSettings]:
         self.merge_settings.header_rows = self.header_rows_spin.value()
         self.merge_settings.data_start_row = self.data_start_spin.value()
-        self.merge_settings.max_opc_length = self.max_opc_length_spin.value()
+        self.merge_settings.rpn_top_percent = self.rpn_top_percent_spin.value()
         self.merge_settings.opc_column = _letter_to_col(self.opc_col_edit.text())
         self.merge_settings.name_column = _letter_to_col(self.name_col_edit.text())
         self.merge_settings.sheet_name = self.sheet_edit.text().strip() or "PFMEA"

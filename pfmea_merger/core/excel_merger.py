@@ -18,6 +18,7 @@ from __future__ import annotations
 from copy import copy
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
+import re
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -167,6 +168,67 @@ def _copy_whole_sheet(src_ws: Worksheet, dst_ws: Worksheet) -> None:
 _last_non_empty_row = last_non_empty_row
 
 
+def _update_rpn_formula(ws: Worksheet, data_start: int, data_end: int,
+                        percent: int) -> None:
+    """Update the template's AQ2 top-RPN formula for the merged data range."""
+    if data_end < data_start:
+        return
+    cell = ws["AQ2"]
+    old = cell.value
+    if isinstance(old, str) and old.startswith("="):
+        formula = old
+        # Keep the template's function/version, but never leave its stale
+        # M10:M901 range in the merged workbook.
+        # Preserve the template's first RPN row (the supplied template uses
+        # row 10, while the station parser starts at row 9).
+        match = re.search(r"\$M\$(\d+):\$M\$?\d+", formula)
+        formula_start = int(match.group(1)) if match else data_start
+        rng = f"$M${formula_start}:$M${data_end}"
+        formula = re.sub(r"\$M\$\d+:\$M\$?\d+", rng, formula)
+        # The template currently contains *0.2. Replace that multiplier while
+        # retaining any future formula structure around it.
+        formula = re.sub(r"\*\s*0(?:\.\d+)?", f"*{percent / 100:g}", formula,
+                         count=1)
+        cell.value = formula
+    else:
+        end = max(data_end, data_start)
+        factor = percent / 100
+        cell.value = (
+            f"=INDEX(_xlfn._xlws.SORT($M${data_start}:$M${end},1,-1),"
+            f"COUNT(_xlfn._xlws.SORT($M${data_start}:$M${end},1,-1))*{factor:g})"
+        )
+
+
+def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
+                                 data_start: int, data_end: int) -> None:
+    """Copy template conditional-format rules, expanding data rules to output."""
+    if not src_ws.conditional_formatting:
+        return
+    from openpyxl.utils.cell import range_boundaries
+
+    template_footer = None
+    for cf in src_ws.conditional_formatting:
+        for ref in str(cf.sqref).split():
+            try:
+                min_col, min_row, max_col, max_row = range_boundaries(ref)
+            except ValueError:
+                continue
+            # Rules covering template data should cover all merged rows. Rules
+            # outside the data area (e.g. header rules) retain their location.
+            if min_row >= data_start and max_row >= data_start:
+                # Header rows stay fixed; preserve the template's first data
+                # row (M10 in the supplied template) and extend the rule to
+                # the final merged data row.
+                max_row = data_end
+            new_ref = (f"{get_column_letter(min_col)}{min_row}:"
+                       f"{get_column_letter(max_col)}{max_row}")
+            for rule in cf.rules:
+                copied_rule = copy(rule)
+                if getattr(rule, "dxf", None) is not None:
+                    copied_rule.dxf = copy(rule.dxf)
+                dst_ws.conditional_formatting.add(new_ref, copied_rule)
+
+
 # ---------------------------------------------------------------------------
 # public API
 
@@ -247,6 +309,25 @@ def merge_pfmea(
             tpl_footer_start, tpl_footer_end,
             write_row, max_col,
         )
+
+    # AQ2 is a template formula, so its source range and percentage must be
+    # recalculated for the rows that actually made it into this output.
+    data_end = write_row - 1
+    _update_rpn_formula(
+        out_ws, settings.data_start_row, data_end,
+        max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
+    )
+    # Conditional-format rules refer to differential styles by dxfId. Since
+    # the output workbook is created from scratch, copy that style table too;
+    # otherwise the rules can exist in XML but render with no formatting.
+    try:
+        for dxf in template_wb._differential_styles.styles:
+            out_wb._differential_styles.add(copy(dxf))
+    except Exception:
+        pass
+    _copy_conditional_formatting(
+        tpl_ws, out_ws, settings.data_start_row, data_end,
+    )
 
     # ---- History sheet ---------------------------------------------------
     # We copy it VERBATIM from the template (never fabricate or "merge" it
