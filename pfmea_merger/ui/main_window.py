@@ -1376,22 +1376,34 @@ class MainWindow(QtWidgets.QMainWindow):
         self._worker.start()
 
     def _build_cp_tab(self):
-        page = QtWidgets.QWidget(); layout = QtWidgets.QVBoxLayout(page)
-        layout.setContentsMargins(18, 18, 18, 18); layout.setSpacing(10)
-        title = QtWidgets.QLabel("Control Plan Merger"); title.setObjectName("SectionLabel"); layout.addWidget(title)
-        top = QtWidgets.QGridLayout(); top.setSpacing(8)
+        page = QtWidgets.QWidget(); page.setLayoutDirection(self.layoutDirection())
+        root = QtWidgets.QVBoxLayout(page); root.setContentsMargins(24, 20, 24, 18); root.setSpacing(14)
+        header = QtWidgets.QLabel("Control Plan Merger")
+        header.setObjectName("Title"); root.addWidget(header)
+        subtitle = QtWidgets.QLabel("تجمیع فایل‌های Control Plan با حفظ قالب Template")
+        subtitle.setProperty("muted", True); root.addWidget(subtitle)
+
+        card1 = _make_card(); g = QtWidgets.QGridLayout(card1); g.setContentsMargins(14,12,14,12); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
+        label = QtWidgets.QLabel("Template CP"); label.setObjectName("SectionLabel")
         self.cp_template_edit = QtWidgets.QLineEdit(); self.cp_template_edit.setReadOnly(True)
-        bt = QtWidgets.QPushButton("انتخاب Template CP"); bt.clicked.connect(self._pick_cp_template)
-        top.addWidget(QtWidgets.QLabel("Template CP:"),0,0); top.addWidget(self.cp_template_edit,0,1); top.addWidget(bt,0,2)
-        self.cp_output_edit = QtWidgets.QLineEdit(str(OUTPUT_DIR / "Merged_CP.xlsx"))
-        top.addWidget(QtWidgets.QLabel("خروجی:"),1,0); top.addWidget(self.cp_output_edit,1,1,1,2)
-        layout.addLayout(top)
-        tools=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
-        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); layout.addWidget(self.cp_files,1)
+        bt = QtWidgets.QPushButton("📂 انتخاب Template") ; bt.clicked.connect(self._pick_cp_template)
+        g.addWidget(label,0,0); g.addWidget(self.cp_template_edit,0,1,1,4); g.addWidget(bt,0,5)
+        root.addWidget(card1)
+
+        card2 = _make_card(); v = QtWidgets.QVBoxLayout(card2); v.setContentsMargins(14,12,14,12); v.setSpacing(9)
+        bar=QtWidgets.QHBoxLayout(); self.cp_add_btn=QtWidgets.QPushButton("📄 افزودن فایل‌ها"); self.cp_folder_btn=QtWidgets.QPushButton("📁 افزودن پوشه"); self.cp_remove_btn=QtWidgets.QPushButton("حذف انتخاب"); self.cp_clear_btn=QtWidgets.QPushButton("پاک کردن همه")
         self.cp_add_btn.clicked.connect(self._cp_add_files); self.cp_folder_btn.clicked.connect(self._cp_add_folder); self.cp_remove_btn.clicked.connect(self._cp_remove_selected); self.cp_clear_btn.clicked.connect(self.cp_files.clear)
-        for x in (self.cp_add_btn,self.cp_folder_btn): tools.addWidget(x)
-        tools.addStretch(1); tools.addWidget(self.cp_remove_btn); tools.addWidget(self.cp_clear_btn); layout.insertLayout(layout.count()-1, tools)
-        self.cp_merge_btn=QtWidgets.QPushButton("ساخت خروجی CP"); self.cp_merge_btn.setProperty("primary",True); self.cp_merge_btn.clicked.connect(self._do_cp_merge); layout.addWidget(self.cp_merge_btn)
+        for x in (self.cp_add_btn,self.cp_folder_btn): bar.addWidget(x)
+        bar.addStretch(1); bar.addWidget(self.cp_remove_btn); bar.addWidget(self.cp_clear_btn); v.addLayout(bar)
+        self.cp_files=QtWidgets.QListWidget(); self.cp_files.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection); self.cp_files.setMinimumHeight(220); v.addWidget(self.cp_files)
+        root.addWidget(card2,1)
+
+        card3 = _make_card(); g = QtWidgets.QGridLayout(card3); g.setContentsMargins(14,12,14,12); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
+        self.cp_output_edit=QtWidgets.QLineEdit(str(OUTPUT_DIR/"Merged_CP.xlsx")); self.cp_output_browse=QtWidgets.QPushButton("📂 انتخاب مسیر")
+        self.cp_output_browse.clicked.connect(self._pick_cp_output)
+        self.cp_merge_btn=QtWidgets.QPushButton("ساخت خروجی CP"); self.cp_merge_btn.setProperty("primary",True); self.cp_merge_btn.setMinimumHeight(42); self.cp_merge_btn.clicked.connect(self._do_cp_merge)
+        g.addWidget(QtWidgets.QLabel("فایل خروجی"),0,0); g.addWidget(self.cp_output_edit,0,1,1,4); g.addWidget(self.cp_output_browse,0,5); g.addWidget(self.cp_merge_btn,1,0,1,6)
+        root.addWidget(card3)
         return page
 
     def _pick_cp_template(self):
@@ -1412,6 +1424,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if folder:
             for path in sorted(Path(folder).glob("*.xlsx")):
                 if not any(self.cp_files.item(i).text()==str(path) for i in range(self.cp_files.count())): self.cp_files.addItem(str(path))
+
+    def _pick_cp_output(self):
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "خروجی CP", self.cp_output_edit.text(), "Excel (*.xlsx)")
+        if path: self.cp_output_edit.setText(path)
 
     def _do_cp_merge(self):
         template=self.cp_template_edit.text().strip(); files=[self.cp_files.item(i).text() for i in range(self.cp_files.count())]
