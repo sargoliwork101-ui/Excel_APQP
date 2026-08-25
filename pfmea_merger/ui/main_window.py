@@ -4,6 +4,7 @@ Main window for the PFMEA Merger app (dark themed).
 from __future__ import annotations
 
 import os
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -27,24 +28,30 @@ class MergeWorker(QtCore.QThread):
     finished_ok = QtCore.pyqtSignal(str)
     failed = QtCore.pyqtSignal(str)
 
-    def __init__(self, template, selections, output, settings, merge_history):
+    def __init__(self, template, selections, output, settings, merge_history,
+                 jobs=None):
         super().__init__()
         self.template = template
         self.selections = selections
         self.output = output
         self.settings = settings
         self.merge_history = merge_history
+        self.jobs = jobs or [(template, selections, output, settings, merge_history)]
+        self.output_paths: List[str] = []
 
     def run(self):
         try:
-            def cb(pct, msg):
-                self.progress.emit(pct, msg)
-            out = merge_pfmea(
-                self.template, self.selections, self.output,
-                self.settings, merge_history=self.merge_history,
-                progress_cb=cb,
-            )
-            self.finished_ok.emit(out)
+            total = len(self.jobs)
+            for index, (template, selections, output, settings, history) in enumerate(self.jobs):
+                def cb(pct, msg, index=index):
+                    overall = int(((index * 100) + pct) / total)
+                    self.progress.emit(overall, msg)
+                out = merge_pfmea(
+                    template, selections, output, settings,
+                    merge_history=history, progress_cb=cb,
+                )
+                self.output_paths.append(out)
+            self.finished_ok.emit(self.output_paths[-1])
         except Exception as e:
             self.failed.emit(f"{e}\n\n{traceback.format_exc()}")
 
@@ -96,6 +103,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.rows: List[Row] = []
         # Suppresses recursion when we programmatically flip checkboxes
         self._suspend_checks = False
+        self._profile_change_guard = False
+        self._active_profile_name = ""
 
         self._worker: Optional[MergeWorker] = None
         self._last_output: str = ""
@@ -313,6 +322,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.history_chk.setChecked(True)
         self.open_after_chk = QtWidgets.QCheckBox()
         self.open_after_chk.setChecked(True)
+        self.all_profiles_chk = QtWidgets.QCheckBox()
 
         self.merge_btn = QtWidgets.QPushButton()
         self.merge_btn.setMinimumHeight(42)
@@ -335,6 +345,8 @@ class MainWindow(QtWidgets.QMainWindow):
         opts_row.addWidget(self.history_chk)
         opts_row.addSpacing(20)
         opts_row.addWidget(self.open_after_chk)
+        opts_row.addSpacing(20)
+        opts_row.addWidget(self.all_profiles_chk)
         opts_row.addStretch(1)
         c3.addLayout(opts_row,                 1, 0, 1, 5)
         c3.addWidget(self.merge_btn,           2, 0, 1, 2)
@@ -380,6 +392,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_browse_btn.setText("📂 " + t("browse"))
         self.history_chk.setText(t("include_history"))
         self.open_after_chk.setText(t("open_after"))
+        self.all_profiles_chk.setText(t("all_profiles"))
         self.merge_btn.setText(t("merge_button"))
         self.open_output_btn.setText("📂 " + t("open_output"))
         self.table.setHorizontalHeaderLabels([
@@ -829,29 +842,44 @@ class MainWindow(QtWidgets.QMainWindow):
             idx = self.profile_combo.findText(target)
             if idx >= 0:
                 self.profile_combo.setCurrentIndex(idx)
+        self._active_profile_name = self.profile_combo.currentText().strip()
         self.profile_combo.blockSignals(False)
 
     def _on_profile_changed(self, _idx: int):
-        # Only auto-load when the user actively picks a non-empty profile
-        name = self.profile_combo.currentText().strip()
-        self.app_settings.last_profile = name
-        self.app_settings.save()
-
-    def _on_load_profile(self):
-        name = self.profile_combo.currentText().strip()
-        if not name:
-            QtWidgets.QMessageBox.information(
-                self, self.tr_.t("info"),
-                self.tr_.t("no_profile_selected"),
-            )
+        if self._profile_change_guard:
             return
+        new_name = self.profile_combo.currentText().strip()
+        old_name = self._active_profile_name
+        if new_name == old_name:
+            return
+        if old_name and self.rows:
+            answer = QtWidgets.QMessageBox.question(
+                self, self.tr_.t("confirm"),
+                self.tr_.t("save_profile_before_switch", name=old_name),
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+                | QtWidgets.QMessageBox.StandardButton.Cancel,
+                QtWidgets.QMessageBox.StandardButton.Yes,
+            )
+            if answer == QtWidgets.QMessageBox.StandardButton.Cancel:
+                self._profile_change_guard = True
+                idx = self.profile_combo.findText(old_name)
+                if idx >= 0:
+                    self.profile_combo.setCurrentIndex(idx)
+                self._profile_change_guard = False
+                return
+            if answer == QtWidgets.QMessageBox.StandardButton.Yes:
+                self._save_profile_data(old_name)
+        self._active_profile_name = new_name
+        self.app_settings.last_profile = new_name
+        self.app_settings.save()
+        if new_name:
+            self._load_profile_by_name(new_name)
+
+    def _load_profile_by_name(self, name: str) -> bool:
         profile = pm.load_profile(name)
         if profile is None:
-            QtWidgets.QMessageBox.warning(
-                self, self.tr_.t("warning"),
-                self.tr_.t("profile_missing", name=name),
-            )
-            return
+            return False
         if profile.template_path and Path(profile.template_path).exists():
             self.template_edit.setText(profile.template_path)
         if profile.settings:
@@ -859,9 +887,40 @@ class MainWindow(QtWidgets.QMainWindow):
         if profile.stations and self.rows:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()
+        self.status.showMessage("● " + self.tr_.t("profile_loaded", name=name))
+        return True
+
+    def _save_profile_data(self, name: str) -> None:
+        stations = [
+            pm.StationEntry(opc=str(r.block.opc_code),
+                            name=str(r.block.name), enabled=r.enabled)
+            for r in self.rows
+        ]
+        product_name = ""
+        product_code = ""
+        for analysis in self.workbooks.values():
+            product_name = product_name or analysis.product_name
+            product_code = product_code or analysis.product_code
+        pm.save_profile(pm.ProductProfile(
+            name=name, product_name=product_name, product_code=product_code,
+            template_path=self.template_edit.text(), stations=stations,
+            settings=self.merge_settings,
+        ))
+
+    def _on_load_profile(self):
+        name = self.profile_combo.currentText().strip()
+        if not name:
+            QtWidgets.QMessageBox.information(
+                self, self.tr_("info"), self.tr_("no_profile_selected"))
+            return
+        if not self._load_profile_by_name(name):
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_("warning"),
+                self.tr_("profile_missing", name=name))
+            return
+        self._active_profile_name = name
         self.app_settings.last_profile = name
         self.app_settings.save()
-        self.status.showMessage("● " + self.tr_.t("profile_loaded", name=name))
 
     def _on_save_profile(self):
         default_name = ""
@@ -916,9 +975,12 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         pm.save_profile(profile)
         self._reload_profile_combo()
+        self._profile_change_guard = True
         idx = self.profile_combo.findText(name)
         if idx >= 0:
             self.profile_combo.setCurrentIndex(idx)
+        self._profile_change_guard = False
+        self._active_profile_name = name
         self.app_settings.last_profile = name
         self.app_settings.save()
         self.status.showMessage("● " + self.tr_.t("profile_saved", name=name))
@@ -979,11 +1041,47 @@ class MainWindow(QtWidgets.QMainWindow):
             output += ".xlsx"
             self.output_edit.setText(output)
 
-        # If output already exists, ask for confirmation
-        if Path(output).exists():
+        # Build one job for normal mode, or one ordered job per profile.
+        jobs = [(template, selections, output, self.merge_settings,
+                 self.history_chk.isChecked())]
+        if self.all_profiles_chk.isChecked():
+            jobs = []
+            for profile_name in pm.list_profiles():
+                profile = pm.load_profile(profile_name)
+                if profile is None:
+                    continue
+                order_map = {s.opc: i for i, s in enumerate(profile.stations)}
+                enabled = {s.opc for s in profile.stations if s.enabled}
+                profile_selections = [
+                    (r.path, r.block) for r in self.rows
+                    if str(r.block.opc_code) in enabled
+                ]
+                profile_selections.sort(
+                    key=lambda pair: order_map.get(str(pair[1].opc_code), 10_000)
+                )
+                if not profile_selections:
+                    continue
+                safe_name = re.sub(
+                    r"[^A-Za-z0-9_\\-\\u0600-\\u06FF ]+", "_", profile_name
+                ).strip() or "profile"
+                profile_output = str(Path(output).with_name(
+                    f"{Path(output).stem}_{safe_name}{Path(output).suffix}"
+                ))
+                jobs.append((template, profile_selections, profile_output,
+                             profile.settings, self.history_chk.isChecked()))
+            if not jobs:
+                QtWidgets.QMessageBox.warning(
+                    self, self.tr_.t("warning"), self.tr_.t("no_selection"))
+                return
+
+        existing = [job[2] for job in jobs if Path(job[2]).exists()]
+        if existing:
+            shown = "\\n".join(existing[:8])
+            if len(existing) > 8:
+                shown += "\\n..."
             ans = QtWidgets.QMessageBox.question(
                 self, self.tr_.t("confirm"),
-                self.tr_.t("overwrite_output", path=output),
+                self.tr_.t("overwrite_output", path=shown),
             )
             if ans != QtWidgets.QMessageBox.StandardButton.Yes:
                 return
@@ -996,7 +1094,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._worker = MergeWorker(
             template, selections, output, self.merge_settings,
-            self.history_chk.isChecked(),
+            self.history_chk.isChecked(), jobs=jobs,
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.finished_ok.connect(self._on_finished)

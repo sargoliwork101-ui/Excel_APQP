@@ -35,6 +35,7 @@ STRINGS = {
     # ---- output
     "output_label": {"fa": "فایل خروجی:", "en": "Output File:"},
     "include_history": {"fa": "تجمیع شیت History", "en": "Merge History Sheet"},
+    "all_profiles": {"fa": "خروجی برای همه پروفایل‌ها", "en": "Create output for all profiles"},
     "merge_button": {"fa": "🚀 تجمیع و ذخیره خروجی", "en": "🚀 Merge & Save Output"},
 
     # ---- profile
@@ -153,6 +154,10 @@ STRINGS = {
     "overwrite_profile": {
         "fa": "پروفایلی به نام «{name}» از قبل وجود دارد. جایگزین شود؟",
         "en": "A profile named '{name}' already exists. Overwrite?",
+    },
+    "save_profile_before_switch": {
+        "fa": "تغییرات پروفایل «{name}» ذخیره شود؟",
+        "en": "Save changes to profile '{name}' before switching?",
     },
     "overwrite_output": {
         "fa": "فایل خروجی از قبل وجود دارد:\n{path}\n\nجایگزین شود؟",
