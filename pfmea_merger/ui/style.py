@@ -91,13 +91,16 @@ QLabel {{
     background: transparent;
 }}
 
-QLabel[muted="true"] {{
-    color: {TEXT_DIM};
+QLabel#AppTitle {{
+    color: #f7f9ff;
+    font-size: 17pt;
+    font-weight: 700;
+    letter-spacing: 0.3px;
 }}
 
-QLabel#AppTitle {{
-    color: #f4f7ff;
-    letter-spacing: 0.3px;
+QLabel[muted="true"] {{
+    color: #9aabc3;
+    font-size: 9pt;
 }}
 
 QLabel#SectionLabel {{
@@ -161,30 +164,31 @@ QComboBox QAbstractItemView {{
 
 /* ----- Buttons ----- */
 QPushButton {{
-    background: {BG_ELEV2};
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 #263957, stop:1 #1d2c44);
     font-weight: 600;
-    color: {TEXT};
-    border: 1px solid {BORDER};
-    border-radius: 9px;
-    padding: 8px 15px;
-    min-height: 19px;
+    color: #edf4ff;
+    border: 1px solid #3a5274;
+    border-radius: 10px;
+    padding: 8px 16px;
+    min-height: 20px;
+}}
+QPushButton:hover {{
+    background: #30486b;
+    border: 1px solid #54749e;
+}}
+QPushButton:pressed {{
+    background: #1a2940;
+    padding-top: 9px;
+}}
+QPushButton:disabled {{
+    color: #71829b;
+    background: #1a273b;
+    border: 1px solid #263750;
 }}
 QPushButton:focus {{
     border: 1px solid {ACCENT};
 }}
-QPushButton:hover {{
-    background: #3a3c42;
-    border: 1px solid #4b4d54;
-}}
-QPushButton:pressed {{
-    background: #26272b;
-}}
-QPushButton:disabled {{
-    color: #6b6f75;
-    background: #2a2b2f;
-    border: 1px solid #33353a;
-}}
-
 QPushButton[primary="true"] {{
     background: {PRIMARY};
     color: white;

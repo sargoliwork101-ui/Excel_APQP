@@ -25,7 +25,7 @@ DEFAULT_FOOTER_MARKERS = [
 ]
 DEFAULT_MAX_OPC_LEN = 20    # anything longer in column A is probably not an OPC code
 DEFAULT_RPN_TOP_PERCENT = 20  # percentage of highest RPN values highlighted
-APP_VERSION = "V00.1.101"
+APP_VERSION = "V00.1.102"
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = APP_ROOT / "profiles"
