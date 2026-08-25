@@ -58,7 +58,23 @@ class MergeSettings:
 
     @classmethod
     def from_dict(cls, d: dict) -> "MergeSettings":
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+        # Settings files/profiles may have been created by older versions or
+        # contain null values. Never let opening the Settings dialog crash the
+        # application because of malformed persisted data.
+        if not isinstance(d, dict):
+            return cls()
+        values = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
+        if not isinstance(values.get("footer_markers", []), list):
+            values["footer_markers"] = list(DEFAULT_FOOTER_MARKERS)
+        for key in ("header_rows", "data_start_row", "opc_column", "name_column",
+                    "max_opc_length", "rpn_top_percent", "failure_row_height",
+                    "failure_column_width"):
+            if key in values:
+                try:
+                    values[key] = int(values[key])
+                except (TypeError, ValueError):
+                    values.pop(key)
+        return cls(**values)
 
 
 @dataclass

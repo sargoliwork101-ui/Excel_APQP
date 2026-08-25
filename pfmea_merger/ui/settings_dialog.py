@@ -142,7 +142,10 @@ class SettingsDialog(QtWidgets.QDialog):
         self.name_col_edit.setText(_col_to_letter(self.merge_settings.name_column))
         self.sheet_edit.setText(self.merge_settings.sheet_name)
         self.history_edit.setText(self.merge_settings.history_sheet)
-        self.footer_edit.setPlainText("\n".join(self.merge_settings.footer_markers))
+        markers = self.merge_settings.footer_markers
+        if not isinstance(markers, list):
+            markers = []
+        self.footer_edit.setPlainText("\n".join(str(m) for m in markers))
         idx = self.lang_combo.findData(self.app_settings.language)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
