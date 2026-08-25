@@ -284,6 +284,8 @@ def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
                 min_col = max_col = rpn_column
             # Rules covering template data should cover all merged rows. Rules
             # outside the data area (e.g. header rules) retain their location.
+            if data_end < min_row:
+                continue
             if min_row >= data_start and max_row >= data_start:
                 # Header rows stay fixed; preserve the template's first data
                 # row (M10 in the supplied template) and extend the rule to

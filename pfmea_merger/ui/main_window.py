@@ -524,7 +524,7 @@ class MainWindow(QtWidgets.QMainWindow):
         root = Path(folder)
         paths = [
             p for pattern in ("*.xlsx", "*.xlsm")
-            for p in root.glob(pattern)
+            for p in root.rglob(pattern)
             if not p.name.startswith("~$")
         ]
         return sorted({str(p) for p in paths}, key=lambda p: p.lower())

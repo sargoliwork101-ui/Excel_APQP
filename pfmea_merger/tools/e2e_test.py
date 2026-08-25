@@ -44,6 +44,9 @@ def section(name):
 # ---------- fixtures ---------------------------------------------------------
 TEMPLATE = TEMPLATES_DIR / "PFMEA_SBM_SOREN_Template.xlsx"
 USER_SAMPLES = APP_ROOT.parent / "sample data"
+_pfmea_folder = USER_SAMPLES / "PFMEA"
+if _pfmea_folder.is_dir():
+    USER_SAMPLES = _pfmea_folder
 
 USER_FILES = sorted(USER_SAMPLES.glob("*.xlsx"))
 
