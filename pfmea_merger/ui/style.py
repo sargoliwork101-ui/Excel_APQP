@@ -30,6 +30,12 @@ def apply_dark_theme(app: QtWidgets.QApplication) -> None:
     """Apply Fusion style + dark palette + a rich QSS stylesheet."""
     app.setStyle("Fusion")
 
+    # Vazirmatn is the primary UI font. The fallbacks keep the application
+    # readable on machines where it has not been installed yet.
+    available_fonts = set(QtGui.QFontDatabase.families())
+    family = "Vazirmatn" if "Vazirmatn" in available_fonts else "Segoe UI"
+    app.setFont(QtGui.QFont(family, 10))
+
     pal = QtGui.QPalette()
     c = QtGui.QColor
     pal.setColor(QtGui.QPalette.ColorRole.Window,          c(BG))
@@ -61,7 +67,7 @@ def apply_dark_theme(app: QtWidgets.QApplication) -> None:
 
 _STYLESHEET = f"""
 * {{
-    font-family: "Segoe UI", "Tahoma", sans-serif;
+    font-family: "Vazirmatn", "Segoe UI", "Tahoma", sans-serif;
     font-size: 10pt;
 }}
 
@@ -246,12 +252,17 @@ QTableWidget::item:hover, QTableView::item:hover {{
     background: #253759;
 }}
 QTableWidget::item, QTableView::item {{
-    padding: 4px 8px;
+    padding: 8px 11px;
     border: none;
+    border-bottom: 1px solid #20324d;
+}}
+QTableWidget::item:hover, QTableView::item:hover {{
+    background: #263a5d;
 }}
 QTableWidget::item:selected, QTableView::item:selected {{
     background: {SEL_BG};
     color: white;
+    border-bottom: 1px solid #7770ff;
 }}
 
 QHeaderView::section {{

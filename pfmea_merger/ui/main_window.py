@@ -216,7 +216,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
-        self.table.setShowGrid(True)
+        # A clean, spaced table reads more like a modern list than a raw
+        # spreadsheet while retaining row selection and keyboard support.
+        self.table.setShowGrid(False)
         self.table.setSelectionBehavior(
             QtWidgets.QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(
@@ -230,7 +232,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(self.COL_OPC,   90)
         self.table.setColumnWidth(self.COL_NAME,  280)
         self.table.setColumnWidth(self.COL_ROWS,  75)
-        self.table.verticalHeader().setDefaultSectionSize(30)
+        self.table.verticalHeader().setDefaultSectionSize(38)
+        self.table.setWordWrap(False)
         self.table.itemChanged.connect(self._on_table_item_changed)
         # The whole USE cell is clickable (not only the native checkbox).
         self.table.cellClicked.connect(self._on_use_cell_clicked)
@@ -581,6 +584,9 @@ class MainWindow(QtWidgets.QMainWindow):
             chk.setText("☑" if r.enabled else "☐")
             chk.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
             chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            chk_font = chk.font(); chk_font.setPointSize(14); chk_font.setBold(True)
+            chk.setFont(chk_font)
+            chk.setForeground(QtGui.QColor("#7d72ff" if r.enabled else "#687992"))
             self.table.setItem(i, self.COL_USE, chk)
 
             order_item = QtWidgets.QTableWidgetItem(str(i + 1))
@@ -590,6 +596,8 @@ class MainWindow(QtWidgets.QMainWindow):
             opc_item = QtWidgets.QTableWidgetItem(str(r.block.opc_code))
             opc_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             f = opc_item.font(); f.setBold(True); opc_item.setFont(f)
+            opc_item.setForeground(QtGui.QColor("#59d6df"))
+            opc_item.setBackground(QtGui.QColor("#1d3855"))
             self.table.setItem(i, self.COL_OPC, opc_item)
 
             name_item = QtWidgets.QTableWidgetItem(str(r.block.name).strip())
@@ -598,10 +606,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
             rows_item = QtWidgets.QTableWidgetItem(str(r.block.row_count))
             rows_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+            rows_item.setForeground(QtGui.QColor("#aebdd3"))
             self.table.setItem(i, self.COL_ROWS, rows_item)
 
             file_item = QtWidgets.QTableWidgetItem(Path(r.path).name)
             file_item.setToolTip(r.path)
+            file_item.setForeground(QtGui.QColor("#b9c7ff"))
             self.table.setItem(i, self.COL_FILE, file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
@@ -630,6 +640,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._suspend_checks = True
             it.setText("☑" if self.rows[row].enabled else "☐")
             it.setData(QtCore.Qt.ItemDataRole.UserRole, self.rows[row].enabled)
+            it.setForeground(QtGui.QColor("#7d72ff" if self.rows[row].enabled else "#687992"))
             self._suspend_checks = False
         self._update_counts()
 
@@ -666,6 +677,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if it:
                 it.setText("☑" if r.enabled else "☐")
                 it.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
+                it.setForeground(QtGui.QColor("#7d72ff" if r.enabled else "#687992"))
         self._suspend_checks = False
         self._update_counts()
 
