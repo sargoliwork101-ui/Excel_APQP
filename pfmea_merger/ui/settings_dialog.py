@@ -53,9 +53,9 @@ class SettingsDialog(QtWidgets.QDialog):
         outer.setContentsMargins(16, 14, 16, 14)
         outer.setSpacing(12)
 
-        title = QtWidgets.QLabel(self.tr_.t("settings_title"))
-        f = title.font(); f.setPointSize(13); f.setBold(True); title.setFont(f)
-        outer.addWidget(title)
+        self.title = QtWidgets.QLabel(self.tr_.t("settings_title"))
+        f = self.title.font(); f.setPointSize(13); f.setBold(True); self.title.setFont(f)
+        outer.addWidget(self.title)
 
         card = QtWidgets.QFrame()
         card.setObjectName("Card")
@@ -183,6 +183,15 @@ class SettingsDialog(QtWidgets.QDialog):
         # Apply pending edits to the previous type is not needed here:
         # values are only committed via apply_to()/save on the active type.
         self._load_values()
+        self._update_doc_title()
+
+    def _update_doc_title(self):
+        """Show which document's settings are being edited."""
+        is_cp = self.doc_combo.currentData() == "cp"
+        doc = self.doc_combo.currentText()
+        self.setWindowTitle(f"{self.tr_.t('settings_title')} — {doc}")
+        if hasattr(self, "title"):
+            self.title.setText(f"{self.tr_.t('settings_title')} — {doc}")
 
     def _apply_doc_visibility(self):
         is_cp = self.doc_combo.currentData() == "cp"
@@ -215,6 +224,7 @@ class SettingsDialog(QtWidgets.QDialog):
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
         self._apply_doc_visibility()
+        self._update_doc_title()
 
     def _save_defaults(self):
         self.apply_to()

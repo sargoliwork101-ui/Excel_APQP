@@ -318,8 +318,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionsClickable(False)
-        self.table.setColumnWidth(self.COL_USE,     58)
-        self.table.setColumnWidth(self.COL_USE_CP,  58)
+        self.table.setColumnWidth(self.COL_USE,     100)
+        self.table.setColumnWidth(self.COL_USE_CP,  80)
         self.table.setColumnWidth(self.COL_ORDER,   60)
         self.table.setColumnWidth(self.COL_OPC,     90)
         self.table.setColumnWidth(self.COL_NAME,    240)
@@ -560,12 +560,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _open_template(self, edit: QtWidgets.QLineEdit = None):
         edit = edit or self.template_edit
         path = edit.text().strip()
+        doc_label = "CP" if edit is self.cp_template_edit else "PFMEA"
         if path and Path(path).exists():
             self._open_file(path)
         else:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"),
-                self.tr_.t("template_missing", path=path or "—"),
+                self.tr_.t("template_missing", doc=doc_label, path=path or "—"),
             )
 
     def eventFilter(self, watched, event):
@@ -1618,12 +1619,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if not template:
             QtWidgets.QMessageBox.warning(
-                self, self.tr_.t("warning"), self.tr_.t("no_template"))
+                self, self.tr_.t("warning"), self.tr_.t("no_template", doc=doc_label))
             return
         if not Path(template).exists():
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"),
-                self.tr_.t("template_missing", path=template))
+                self.tr_.t("template_missing", doc=doc_label, path=template))
             return
         if not self.rows:
             QtWidgets.QMessageBox.warning(
@@ -1654,7 +1655,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ]
         if not selections:
             QtWidgets.QMessageBox.warning(
-                self, self.tr_.t("warning"), self.tr_.t("no_selection"))
+                self, self.tr_.t("warning"),
+                self.tr_.t("no_selection", doc=doc_label))
             return
 
         output = output_edit.text().strip()
@@ -1712,7 +1714,8 @@ class MainWindow(QtWidgets.QMainWindow):
                              profile_settings, self.history_chk.isChecked()))
             if not jobs:
                 QtWidgets.QMessageBox.warning(
-                    self, self.tr_.t("warning"), self.tr_.t("no_selection"))
+                    self, self.tr_.t("warning"),
+                self.tr_.t("no_selection", doc=doc_label))
                 return
 
         existing = [job[2] for job in jobs if Path(job[2]).exists()]
@@ -1827,9 +1830,12 @@ class MainWindow(QtWidgets.QMainWindow):
         t = self.tr_.t
         menu = QtWidgets.QMenu(self)
         act_toggle = menu.addAction("☑ " + t("toggle"))
+        act_check = menu.addAction("☑ " + t("check_pfmea"))
+        act_uncheck = menu.addAction("☐ " + t("uncheck_pfmea"))
+        menu.addSeparator()
         act_toggle_cp = menu.addAction("☑ " + t("toggle_cp"))
-        act_check = menu.addAction("☑ " + t("select_all"))
-        act_uncheck = menu.addAction("☐ " + t("deselect_all"))
+        act_check_cp = menu.addAction("☑ " + t("check_cp"))
+        act_uncheck_cp = menu.addAction("☐ " + t("uncheck_cp"))
         menu.addSeparator()
         act_top = menu.addAction("⏫ " + t("move_top"))
         act_up = menu.addAction("⬆ " + t("move_up"))
@@ -1845,6 +1851,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sync_checks_from_model()
         elif chosen is act_uncheck:
             for r in rows: self.rows[r].enabled = False
+            self._sync_checks_from_model()
+        elif chosen is act_check_cp:
+            for r in rows: self.rows[r].cp_enabled = True
+            self._sync_checks_from_model()
+        elif chosen is act_uncheck_cp:
+            for r in rows: self.rows[r].cp_enabled = False
             self._sync_checks_from_model()
         elif chosen is act_top:    self._move_top()
         elif chosen is act_up:     self._move_row(-1)

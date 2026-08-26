@@ -9,7 +9,7 @@ STRINGS = {
     "profile_title": {"fa": "پروفایل محصول", "en": "Product Profile"},
 
     # ---- top toolbar
-    "template_label": {"fa": "فایل قالب:", "en": "Template File:"},
+    "template_label": {"fa": "فایل قالب PFMEA:", "en": "PFMEA Template File:"},
     "cp_template_label": {"fa": "فایل قالب CP:", "en": "CP Template File:"},
     "browse": {"fa": "انتخاب...", "en": "Browse..."},
     "open_template": {"fa": "باز کردن", "en": "Open"},
@@ -33,7 +33,7 @@ STRINGS = {
         "fa": "ایستگاه‌ها — برای جابه‌جایی از دکمه‌های فلش پایین جدول استفاده کنید:",
         "en": "Stations — use the arrow buttons below the table to reorder:",
     },
-    "col_use": {"fa": "استفاده", "en": "Use"},
+    "col_use": {"fa": "استفاده در PFMEA", "en": "Use in PFMEA"},
     "col_use_cp": {"fa": "استفاده در CP", "en": "Use in CP"},
     "col_order": {"fa": "ترتیب", "en": "Order"},
     "col_opc": {"fa": "کد OPC", "en": "OPC Code"},
@@ -47,11 +47,11 @@ STRINGS = {
     "move_down": {"fa": "پایین", "en": "Down"},
 
     # ---- output
-    "output_label": {"fa": "فایل خروجی:", "en": "Output File:"},
+    "output_label": {"fa": "فایل خروجی PFMEA:", "en": "PFMEA Output File:"},
     "cp_output_label": {"fa": "فایل خروجی CP:", "en": "CP Output File:"},
-    "include_history": {"fa": "تجمیع شیت History", "en": "Merge History Sheet"},
+    "include_history": {"fa": "تجمیع شیت History/تغییرات", "en": "Merge History/تغییرات sheet"},
     "all_profiles": {"fa": "خروجی برای همه پروفایل‌ها", "en": "Create output for all profiles"},
-    "merge_button": {"fa": "🚀 تجمیع و ذخیره خروجی", "en": "🚀 Merge & Save Output"},
+    "merge_button": {"fa": "🚀 تجمیع PFMEA", "en": "🚀 Merge PFMEA"},
     "merge_cp_button": {"fa": "🚀 تجمیع Control Plan", "en": "🚀 Merge Control Plan"},
 
     # ---- profile
@@ -98,12 +98,12 @@ STRINGS = {
 
     # ---- messages
     "no_template": {
-        "fa": "لطفاً ابتدا فایل قالب (Template) را انتخاب کنید.",
-        "en": "Please select a template file first.",
+        "fa": "لطفاً ابتدا فایل قالب {doc} را انتخاب کنید.",
+        "en": "Please select the {doc} template file first.",
     },
     "no_selection": {
-        "fa": "هیچ ایستگاهی برای تجمیع انتخاب نشده است.",
-        "en": "No stations selected for merging.",
+        "fa": "هیچ ایستگاهی برای تجمیع {doc} انتخاب نشده است.",
+        "en": "No stations selected for {doc} merge.",
     },
     "no_files": {
         "fa": "هیچ فایلی اضافه نشده است.",
@@ -135,10 +135,10 @@ STRINGS = {
     "confirm": {"fa": "تایید", "en": "Confirm"},
     "excel_files": {"fa": "فایل‌های اکسل", "en": "Excel files"},
     "file_not_pfmea": {
-        "fa": "فایل «{name}» فرمت PFMEA معتبر ندارد و نادیده گرفته شد.",
-        "en": "File '{name}' is not a valid PFMEA file and was skipped.",
+        "fa": "فایل «{name}» فرمت معتبر PFMEA یا CP ندارد و نادیده گرفته شد.",
+        "en": "File '{name}' is not a valid PFMEA or CP file and was skipped.",
     },
-    "missing_file": {"fa": "⚠ فایل ورودی موجود نیست", "en": "⚠ Input file missing"},
+    "missing_file": {"fa": "⚠ فایل PFMEA موجود نیست", "en": "⚠ PFMEA file missing"},
     "cp_file_missing": {"fa": "⚠ فایل CP موجود نیست", "en": "⚠ CP file missing"},
     "missing_inputs_block": {
         "fa": "برای ایستگاه‌های زیر فایل {doc} موجود نیست:\n{names}\n\nابتدا فایل‌ها را اضافه کنید یا تیک CP آن‌ها را بردارید.",
@@ -200,8 +200,8 @@ STRINGS = {
         "en": "Output file already exists:\n{path}\n\nOverwrite?",
     },
     "template_missing": {
-        "fa": "فایل قالب پیدا نشد:\n{path}",
-        "en": "Template file not found:\n{path}",
+        "fa": "فایل قالب {doc} پیدا نشد:\n{path}",
+        "en": "{doc} template file not found:\n{path}",
     },
     "no_xlsx_in_folder": {
         "fa": "در پوشه انتخاب‌شده هیچ فایل .xlsx وجود ندارد.",
@@ -211,7 +211,11 @@ STRINGS = {
         "fa": "تجمیع کامل شد ← {path}",
         "en": "Merge complete → {path}",
     },
-    "toggle": {"fa": "تغییر وضعیت", "en": "Toggle"},
+    "toggle": {"fa": "تغییر وضعیت PFMEA", "en": "Toggle PFMEA"},
+    "check_pfmea": {"fa": "تیک PFMEA", "en": "Check PFMEA"},
+    "uncheck_pfmea": {"fa": "حذف تیک PFMEA", "en": "Uncheck PFMEA"},
+    "check_cp": {"fa": "تیک CP", "en": "Check CP"},
+    "uncheck_cp": {"fa": "حذف تیک CP", "en": "Uncheck CP"},
 }
 
 
