@@ -29,11 +29,42 @@ from pfmea_merger.ui.main_window import MainWindow
 from pfmea_merger.ui.style import apply_dark_theme
 
 
+def _install_excepthook() -> None:
+    """Never let a bug in a slot/callback close the whole application.
+
+    PyQt6 calls qFatal() — the app simply disappears — whenever an exception
+    escapes a slot or event handler while the default sys.excepthook is
+    installed. Replacing the hook keeps the app alive and shows the error
+    to the user instead.
+    """
+    def hook(exc_type, exc_value, tb):
+        import traceback
+        text = "".join(traceback.format_exception(exc_type, exc_value, tb))
+        try:
+            sys.stderr.write(text)
+        except Exception:
+            pass
+        try:
+            box = QtWidgets.QMessageBox()
+            box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            box.setWindowTitle("Internal error / خطای داخلی")
+            box.setText(
+                "An unexpected error occurred, but the program stays open.\n"
+                "خطای غیرمنتظره‌ای رخ داد، اما برنامه باز می‌ماند.")
+            box.setDetailedText(text)
+            box.exec()
+        except Exception:
+            pass
+
+    sys.excepthook = hook
+
+
 def main() -> int:
     # High-DPI is on by default in Qt6.
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("PFMEA & CP Merger")
     app.setOrganizationName("APQP Tools")
+    _install_excepthook()
 
     # Pick a font that renders Persian well
     fonts_to_try = ["Segoe UI", "Tahoma", "IRANSans", "Vazirmatn", "B Nazanin"]

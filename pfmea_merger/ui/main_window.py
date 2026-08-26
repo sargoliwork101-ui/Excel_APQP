@@ -660,23 +660,36 @@ class MainWindow(QtWidgets.QMainWindow):
             if watched is table.viewport():
                 if event.type() in (QtCore.QEvent.Type.MouseMove,
                                     QtCore.QEvent.Type.HoverMove):
-                    self._update_file_cursor(event.pos())
+                    # Qt6 mouse/hover events expose position() (QPointF),
+                    # not the Qt5-only pos(). Never let a cursor update kill
+                    # the app (PyQt6 aborts on unhandled exceptions).
+                    try:
+                        pos = event.position().toPoint()
+                        self._update_file_cursor(pos)
+                    except Exception:
+                        pass
                     return False
                 if event.type() == QtCore.QEvent.Type.Leave:
-                    table.viewport().setCursor(
-                        QtCore.Qt.CursorShape.ArrowCursor)
+                    try:
+                        table.viewport().setCursor(
+                            QtCore.Qt.CursorShape.ArrowCursor)
+                    except Exception:
+                        pass
                     return False
             header = table.horizontalHeader()
             if watched is header and event.type() == QtCore.QEvent.Type.ToolTip:
-                section = header.logicalIndexAt(event.pos())
-                tip = ""
-                if section == self.COL_USE:
-                    tip = self.tr_.t("col_use_tip")
-                elif section == self.COL_USE_CP:
-                    tip = self.tr_.t("col_use_cp_tip")
-                if tip:
-                    QtWidgets.QToolTip.showText(event.globalPos(), tip, header)
-                    return True
+                try:
+                    section = header.logicalIndexAt(event.pos())
+                    tip = ""
+                    if section == self.COL_USE:
+                        tip = self.tr_.t("col_use_tip")
+                    elif section == self.COL_USE_CP:
+                        tip = self.tr_.t("col_use_cp_tip")
+                    if tip:
+                        QtWidgets.QToolTip.showText(event.globalPos(), tip, header)
+                        return True
+                except Exception:
+                    pass
         return super().eventFilter(watched, event)
 
     def _update_file_cursor(self, pos) -> None:
