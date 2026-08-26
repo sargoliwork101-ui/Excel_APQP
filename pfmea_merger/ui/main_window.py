@@ -208,17 +208,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ---- Card 1: template + profile
         card1 = _make_card()
-        c1 = QtWidgets.QGridLayout(card1)
+        c1 = QtWidgets.QVBoxLayout(card1)
         c1.setContentsMargins(14, 12, 14, 12)
-        c1.setHorizontalSpacing(10)
-        c1.setVerticalSpacing(8)
+        c1.setSpacing(8)
 
         self.template_label = QtWidgets.QLabel()
         self.template_label.setObjectName("SectionLabel")
         self.template_edit = QtWidgets.QLineEdit()
         self.template_edit.setReadOnly(True)
-        self.template_browse_btn = QtWidgets.QPushButton()
-        self.template_open_btn = QtWidgets.QPushButton()
+        self.template_browse_btn = QtWidgets.QPushButton("📂")
+        self.template_open_btn = QtWidgets.QPushButton("📖")
+        for b in (self.template_browse_btn, self.template_open_btn):
+            b.setFixedSize(34, 30)
         self.template_browse_btn.clicked.connect(self._pick_template)
         self.template_open_btn.clicked.connect(lambda: self._open_template(self.template_edit))
         self.template_edit.installEventFilter(self)
@@ -227,8 +228,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cp_template_label.setObjectName("SectionLabel")
         self.cp_template_edit = QtWidgets.QLineEdit()
         self.cp_template_edit.setReadOnly(True)
-        self.cp_template_browse_btn = QtWidgets.QPushButton()
-        self.cp_template_open_btn = QtWidgets.QPushButton()
+        self.cp_template_browse_btn = QtWidgets.QPushButton("📂")
+        self.cp_template_open_btn = QtWidgets.QPushButton("📖")
+        for b in (self.cp_template_browse_btn, self.cp_template_open_btn):
+            b.setFixedSize(34, 30)
         self.cp_template_browse_btn.clicked.connect(self._pick_cp_template)
         self.cp_template_open_btn.clicked.connect(lambda: self._open_template(self.cp_template_edit))
         self.cp_template_edit.installEventFilter(self)
@@ -246,21 +249,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.profile_save_btn.clicked.connect(self._on_save_profile)
         self.profile_delete_btn.clicked.connect(self._on_delete_profile)
 
-        c1.addWidget(self.template_label,       0, 0)
-        c1.addWidget(self.template_edit,        0, 1, 1, 4)
-        c1.addWidget(self.template_open_btn,    0, 5)
-        c1.addWidget(self.template_browse_btn,  0, 6)
-        c1.addWidget(self.cp_template_label,    1, 0)
-        c1.addWidget(self.cp_template_edit,     1, 1, 1, 4)
-        c1.addWidget(self.cp_template_open_btn, 1, 5)
-        c1.addWidget(self.cp_template_browse_btn, 1, 6)
-        c1.addWidget(self.profile_label,        2, 0)
-        c1.addWidget(self.profile_combo,        2, 1, 1, 2)
-        c1.addWidget(self.profile_load_btn,     2, 3)
-        c1.addWidget(self.profile_save_btn,     2, 4)
-        c1.addWidget(self.profile_delete_btn,   2, 5, 1, 2)
-        c1.setColumnStretch(1, 1)
-        c1.setColumnStretch(2, 1)
+        # Both templates share one compact row; icon-only buttons keep it tidy.
+        tpl_row = QtWidgets.QHBoxLayout()
+        tpl_row.addWidget(self.template_label)
+        tpl_row.addWidget(self.template_edit, 1)
+        tpl_row.addWidget(self.template_open_btn)
+        tpl_row.addWidget(self.template_browse_btn)
+        tpl_row.addSpacing(16)
+        tpl_row.addWidget(self.cp_template_label)
+        tpl_row.addWidget(self.cp_template_edit, 1)
+        tpl_row.addWidget(self.cp_template_open_btn)
+        tpl_row.addWidget(self.cp_template_browse_btn)
+        c1.addLayout(tpl_row)
+
+        prof_row = QtWidgets.QHBoxLayout()
+        prof_row.addWidget(self.profile_label)
+        prof_row.addWidget(self.profile_combo, 1)
+        prof_row.addWidget(self.profile_load_btn)
+        prof_row.addWidget(self.profile_save_btn)
+        prof_row.addWidget(self.profile_delete_btn)
+        c1.addLayout(prof_row)
         root.addWidget(card1)
 
         # ---- Card 2: files toolbar + station table
@@ -382,21 +390,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ---- Card 3: output + merge
         card3 = _make_card()
-        c3 = QtWidgets.QGridLayout(card3)
+        c3 = QtWidgets.QVBoxLayout(card3)
         c3.setContentsMargins(14, 12, 14, 12)
-        c3.setHorizontalSpacing(10)
-        c3.setVerticalSpacing(8)
+        c3.setSpacing(8)
 
         self.output_label = QtWidgets.QLabel()
         self.output_label.setObjectName("SectionLabel")
         self.output_edit = QtWidgets.QLineEdit()
-        self.output_browse_btn = QtWidgets.QPushButton()
+        self.output_browse_btn = QtWidgets.QPushButton("📂")
+        self.output_browse_btn.setFixedSize(34, 30)
         self.output_browse_btn.clicked.connect(self._pick_output)
 
         self.cp_output_label = QtWidgets.QLabel()
         self.cp_output_label.setObjectName("SectionLabel")
         self.cp_output_edit = QtWidgets.QLineEdit()
-        self.cp_output_browse_btn = QtWidgets.QPushButton()
+        self.cp_output_browse_btn = QtWidgets.QPushButton("📂")
+        self.cp_output_browse_btn.setFixedSize(34, 30)
         self.cp_output_browse_btn.clicked.connect(self._pick_cp_output)
 
         self.history_chk = QtWidgets.QCheckBox()
@@ -418,20 +427,28 @@ class MainWindow(QtWidgets.QMainWindow):
         f = self.cp_merge_btn.font(); f.setPointSize(11); f.setBold(True); self.cp_merge_btn.setFont(f)
         self.cp_merge_btn.clicked.connect(self._do_cp_merge)
 
-        self.open_output_btn = QtWidgets.QPushButton()
-        self.open_output_btn.setEnabled(False)
+        # Folder button: opens the output folder (last produced output, or
+        # the default output folder when nothing has been merged yet).
+        self.open_output_btn = QtWidgets.QPushButton("📁")
+        self.open_output_btn.setFixedSize(42, 42)
+        f = self.open_output_btn.font(); f.setPointSize(14); self.open_output_btn.setFont(f)
         self.open_output_btn.clicked.connect(self._open_last_output)
 
         self.progress = QtWidgets.QProgressBar()
         self.progress.setValue(0)
         self.progress.setTextVisible(True)
 
-        c3.addWidget(self.output_label,        0, 0)
-        c3.addWidget(self.output_edit,         0, 1, 1, 3)
-        c3.addWidget(self.output_browse_btn,   0, 4)
-        c3.addWidget(self.cp_output_label,     1, 0)
-        c3.addWidget(self.cp_output_edit,      1, 1, 1, 3)
-        c3.addWidget(self.cp_output_browse_btn, 1, 4)
+        # Both output paths share one compact row.
+        out_row = QtWidgets.QHBoxLayout()
+        out_row.addWidget(self.output_label)
+        out_row.addWidget(self.output_edit, 1)
+        out_row.addWidget(self.output_browse_btn)
+        out_row.addSpacing(16)
+        out_row.addWidget(self.cp_output_label)
+        out_row.addWidget(self.cp_output_edit, 1)
+        out_row.addWidget(self.cp_output_browse_btn)
+        c3.addLayout(out_row)
+
         opts_row = QtWidgets.QHBoxLayout()
         opts_row.addWidget(self.history_chk)
         opts_row.addSpacing(20)
@@ -439,13 +456,15 @@ class MainWindow(QtWidgets.QMainWindow):
         opts_row.addSpacing(20)
         opts_row.addWidget(self.all_profiles_chk)
         opts_row.addStretch(1)
-        c3.addLayout(opts_row,                 2, 0, 1, 5)
-        c3.addWidget(self.merge_btn,           3, 0, 1, 2)
-        c3.addWidget(self.cp_merge_btn,        3, 2, 1, 2)
-        c3.addWidget(self.progress,            4, 0, 1, 4)
-        c3.addWidget(self.open_output_btn,     4, 4)
-        c3.setColumnStretch(1, 1)
-        c3.setColumnStretch(2, 1)
+        c3.addLayout(opts_row)
+
+        # Merge buttons + progress + output folder button on a single line.
+        merge_row = QtWidgets.QHBoxLayout()
+        merge_row.addWidget(self.merge_btn)
+        merge_row.addWidget(self.cp_merge_btn)
+        merge_row.addWidget(self.progress, 1)
+        merge_row.addWidget(self.open_output_btn)
+        c3.addLayout(merge_row)
         root.addWidget(card3)
 
         self.status = self.statusBar()
@@ -469,11 +488,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.restore_backup_btn.setText("↶ " + t("restore_backup"))
         self.about_btn.setText("ℹ " + t("about"))
         self.template_label.setText(t("template_label"))
-        self.template_open_btn.setText("📖 " + t("open_template"))
-        self.template_browse_btn.setText("📂 " + t("browse"))
+        self.template_open_btn.setText("📖")
+        self.template_open_btn.setToolTip(t("tpl_open_pfmea_tip"))
+        self.template_browse_btn.setText("📂")
+        self.template_browse_btn.setToolTip(t("tpl_browse_pfmea_tip"))
         self.cp_template_label.setText(t("cp_template_label"))
-        self.cp_template_open_btn.setText("📖 " + t("open_template"))
-        self.cp_template_browse_btn.setText("📂 " + t("browse"))
+        self.cp_template_open_btn.setText("📖")
+        self.cp_template_open_btn.setToolTip(t("tpl_open_cp_tip"))
+        self.cp_template_browse_btn.setText("📂")
+        self.cp_template_browse_btn.setToolTip(t("tpl_browse_cp_tip"))
         self.profile_label.setText(t("profile_label"))
         self.profile_load_btn.setText("↩ " + t("load_profile"))
         self.profile_save_btn.setText("💾 " + t("save_profile"))
@@ -488,15 +511,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.deselect_all_btn.setText("☐ " + t("deselect_all"))
         self.invert_btn.setText("↔ " + t("invert"))
         self.output_label.setText(t("output_label"))
-        self.output_browse_btn.setText("📂 " + t("browse"))
+        self.output_browse_btn.setText("📂")
+        self.output_browse_btn.setToolTip(t("out_browse_pfmea_tip"))
         self.cp_output_label.setText(t("cp_output_label"))
-        self.cp_output_browse_btn.setText("📂 " + t("browse"))
+        self.cp_output_browse_btn.setText("📂")
+        self.cp_output_browse_btn.setToolTip(t("out_browse_cp_tip"))
         self.history_chk.setText(t("include_history"))
         self.open_after_chk.setText(t("open_after"))
         self.all_profiles_chk.setText(t("all_profiles"))
         self.merge_btn.setText(t("merge_button"))
         self.cp_merge_btn.setText(t("merge_cp_button"))
-        self.open_output_btn.setText("📂 " + t("open_output"))
+        self.open_output_btn.setText("📁")
+        self.open_output_btn.setToolTip(t("open_output_folder"))
         self.table.setHorizontalHeaderLabels([
             t("col_use"), t("col_use_cp"), t("col_order"), t("col_opc"),
             t("col_name"), t("col_rows"), t("col_file"), t("col_file_cp"),
@@ -1789,8 +1815,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._open_file(out_path)
 
     def _open_last_output(self):
+        """Open the outputs folder (last produced output, or the default)."""
         if self._last_output and Path(self._last_output).exists():
-            self._open_file(self._last_output)
+            folder = str(Path(self._last_output).parent)
+        else:
+            candidate = self.output_edit.text().strip()
+            folder = (str(Path(candidate).parent) if candidate
+                      else str(OUTPUT_DIR))
+        self._open_folder(folder)
 
     def _open_folder(self, folder: str):
         try:

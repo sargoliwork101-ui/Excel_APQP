@@ -11,6 +11,10 @@ STRINGS = {
     # ---- top toolbar
     "template_label": {"fa": "فایل قالب PFMEA:", "en": "PFMEA Template File:"},
     "cp_template_label": {"fa": "فایل قالب CP:", "en": "CP Template File:"},
+    "tpl_open_pfmea_tip": {"fa": "باز کردن فایل قالب PFMEA", "en": "Open the PFMEA template file"},
+    "tpl_browse_pfmea_tip": {"fa": "انتخاب فایل قالب PFMEA", "en": "Browse for the PFMEA template file"},
+    "tpl_open_cp_tip": {"fa": "باز کردن فایل قالب CP", "en": "Open the CP template file"},
+    "tpl_browse_cp_tip": {"fa": "انتخاب فایل قالب CP", "en": "Browse for the CP template file"},
     "browse": {"fa": "انتخاب...", "en": "Browse..."},
     "open_template": {"fa": "باز کردن", "en": "Open"},
     "about": {"fa": "درباره ما", "en": "About"},
@@ -49,6 +53,8 @@ STRINGS = {
     # ---- output
     "output_label": {"fa": "فایل خروجی PFMEA:", "en": "PFMEA Output File:"},
     "cp_output_label": {"fa": "فایل خروجی CP:", "en": "CP Output File:"},
+    "out_browse_pfmea_tip": {"fa": "انتخاب مسیر فایل خروجی PFMEA", "en": "Browse for the PFMEA output file"},
+    "out_browse_cp_tip": {"fa": "انتخاب مسیر فایل خروجی CP", "en": "Browse for the CP output file"},
     "include_history": {"fa": "تجمیع شیت History/تغییرات", "en": "Merge History/تغییرات sheet"},
     "all_profiles": {"fa": "خروجی برای همه پروفایل‌ها", "en": "Create output for all profiles"},
     "merge_button": {"fa": "🚀 تجمیع PFMEA", "en": "🚀 Merge PFMEA"},
@@ -161,6 +167,7 @@ STRINGS = {
     "move_top": {"fa": "بالاترین", "en": "Move to top"},
     "move_bottom": {"fa": "پایین‌ترین", "en": "Move to bottom"},
     "open_output": {"fa": "باز کردن خروجی", "en": "Open output"},
+    "open_output_folder": {"fa": "باز کردن پوشه خروجی‌ها", "en": "Open the output folder"},
     "open_after": {"fa": "پس از تجمیع فایل را باز کن", "en": "Open output after merge"},
     "refreshed": {"fa": "به‌روزرسانی انجام شد.", "en": "Refreshed."},
     "restored_folder": {
