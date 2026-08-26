@@ -25,7 +25,16 @@ DEFAULT_FOOTER_MARKERS = [
 ]
 DEFAULT_MAX_OPC_LEN = 20    # anything longer in column A is probably not an OPC code
 DEFAULT_RPN_TOP_PERCENT = 20  # percentage of highest RPN values highlighted
-APP_VERSION = "V00.1.106"
+APP_VERSION = "V00.2.100"
+
+# ---- Control Plan (CP) document defaults -------------------------------
+# CP is an independent output: its own sheet ("برنامه کنترل  " with trailing
+# spaces in real files), header rows 1..9, data from row 10, and no SO/RPN
+# or AQ2 formulas at all.
+CP_SHEET_NAME = "برنامه کنترل"
+CP_HISTORY_SHEET = "تغییرات"
+CP_HEADER_ROWS = 9
+CP_DATA_START_ROW = 10
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 PROFILES_DIR = APP_ROOT / "profiles"
@@ -57,6 +66,8 @@ class MergeSettings:
     failure_row_height: int = 0
     # 0 means automatic width based on the longest displayed mode.
     failure_column_width: int = 0
+    # Document type: "pfmea" (with SO/RPN/AQ2 formulas) or "cp" (no formulas).
+    doc_type: str = "pfmea"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -71,6 +82,8 @@ class MergeSettings:
         values = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
         if not isinstance(values.get("footer_markers", []), list):
             values["footer_markers"] = list(DEFAULT_FOOTER_MARKERS)
+        if values.get("doc_type") not in ("pfmea", "cp"):
+            values["doc_type"] = "pfmea"
         for key in ("header_rows", "data_start_row", "opc_column", "name_column",
                     "failure_mode_column", "so_column", "rpn_column",
                     "max_opc_length", "rpn_top_percent", "failure_row_height",
@@ -83,6 +96,17 @@ class MergeSettings:
         return cls(**values)
 
 
+def default_cp_settings() -> MergeSettings:
+    """Default merge settings for the Control Plan document."""
+    return MergeSettings(
+        header_rows=CP_HEADER_ROWS,
+        data_start_row=CP_DATA_START_ROW,
+        sheet_name=CP_SHEET_NAME,
+        history_sheet=CP_HISTORY_SHEET,
+        doc_type="cp",
+    )
+
+
 @dataclass
 class AppSettings:
     """Global app settings."""
@@ -92,6 +116,10 @@ class AppSettings:
     last_output_dir: str = ""
     last_profile: str = ""
     saved_merge_settings: dict = field(default_factory=dict)
+    # Control Plan counterparts (independent template/output/settings).
+    last_cp_template: str = ""
+    last_cp_output_dir: str = ""
+    saved_cp_merge_settings: dict = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "AppSettings":

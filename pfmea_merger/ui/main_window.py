@@ -13,7 +13,10 @@ from typing import Dict, List, Optional, Tuple
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from ..core.config import AppSettings, MergeSettings, TEMPLATES_DIR, OUTPUT_DIR, APP_VERSION
+from ..core.config import (
+    AppSettings, MergeSettings, TEMPLATES_DIR, OUTPUT_DIR, APP_VERSION,
+    default_cp_settings,
+)
 from ..core.i18n import Translator
 from ..core.excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook
 from ..core.excel_merger import merge_pfmea
@@ -78,19 +81,26 @@ def _make_card() -> QtWidgets.QFrame:
 # Row model: keeps checkbox state in Python so profile save/load is trivial
 # =============================================================================
 class Row:
-    __slots__ = ("path", "block", "enabled")
+    __slots__ = ("path", "block", "enabled", "cp_path", "cp_block", "cp_enabled")
 
-    def __init__(self, path: str, block: StationBlock, enabled: bool = True):
+    def __init__(self, path: str, block: StationBlock, enabled: bool = True,
+                 cp_path: str = "", cp_block: Optional[StationBlock] = None,
+                 cp_enabled: bool = True):
         self.path = path
         self.block = block
         self.enabled = enabled
+        # Control Plan counterpart: the CP file/station for the same OPC and
+        # an independent "use in CP" flag.
+        self.cp_path = cp_path
+        self.cp_block = cp_block
+        self.cp_enabled = cp_enabled
 
 
 # =============================================================================
 # Main window
 # =============================================================================
 class MainWindow(QtWidgets.QMainWindow):
-    COL_USE, COL_ORDER, COL_OPC, COL_NAME, COL_ROWS, COL_FILE = range(6)
+    COL_USE, COL_USE_CP, COL_ORDER, COL_OPC, COL_NAME, COL_ROWS, COL_FILE, COL_FILE_CP = range(8)
 
     def __init__(self):
         super().__init__()
@@ -99,10 +109,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.merge_settings = MergeSettings.from_dict(
             self.app_settings.saved_merge_settings
         )
+        # Control Plan settings: independent from PFMEA (own sheet/rows).
+        saved_cp = self.app_settings.saved_cp_merge_settings
+        if isinstance(saved_cp, dict) and saved_cp:
+            cp_settings = MergeSettings.from_dict(saved_cp)
+            self.cp_merge_settings = cp_settings if cp_settings.doc_type == "cp" \
+                else default_cp_settings()
+        else:
+            self.cp_merge_settings = default_cp_settings()
         self.tr_ = Translator(self.app_settings.language)
 
         # file_path -> WorkbookAnalysis (for product info, etc.)
         self.workbooks: Dict[str, WorkbookAnalysis] = {}
+        # CP input files: file_path -> WorkbookAnalysis (CP settings)
+        self.cp_workbooks: Dict[str, WorkbookAnalysis] = {}
         # Ordered list of station rows shown in the table (source of truth)
         self.rows: List[Row] = []
         # Suppresses recursion when we programmatically flip checkboxes
@@ -113,6 +133,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._row_heights: Dict[str, int] = {}
         self._hidden_stations: set[str] = set()
         self._missing_opcs: set[str] = set()
+        self._cp_missing_opcs: set[str] = set()
         self._blink_on = False
         self._layout_sync = False
         self._missing_timer = QtCore.QTimer(self)
@@ -199,8 +220,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_browse_btn = QtWidgets.QPushButton()
         self.template_open_btn = QtWidgets.QPushButton()
         self.template_browse_btn.clicked.connect(self._pick_template)
-        self.template_open_btn.clicked.connect(self._open_template)
+        self.template_open_btn.clicked.connect(lambda: self._open_template(self.template_edit))
         self.template_edit.installEventFilter(self)
+
+        self.cp_template_label = QtWidgets.QLabel()
+        self.cp_template_label.setObjectName("SectionLabel")
+        self.cp_template_edit = QtWidgets.QLineEdit()
+        self.cp_template_edit.setReadOnly(True)
+        self.cp_template_browse_btn = QtWidgets.QPushButton()
+        self.cp_template_open_btn = QtWidgets.QPushButton()
+        self.cp_template_browse_btn.clicked.connect(self._pick_cp_template)
+        self.cp_template_open_btn.clicked.connect(lambda: self._open_template(self.cp_template_edit))
+        self.cp_template_edit.installEventFilter(self)
 
         self.profile_label = QtWidgets.QLabel()
         self.profile_label.setObjectName("SectionLabel")
@@ -219,11 +250,15 @@ class MainWindow(QtWidgets.QMainWindow):
         c1.addWidget(self.template_edit,        0, 1, 1, 4)
         c1.addWidget(self.template_open_btn,    0, 5)
         c1.addWidget(self.template_browse_btn,  0, 6)
-        c1.addWidget(self.profile_label,        1, 0)
-        c1.addWidget(self.profile_combo,        1, 1, 1, 2)
-        c1.addWidget(self.profile_load_btn,     1, 3)
-        c1.addWidget(self.profile_save_btn,     1, 4)
-        c1.addWidget(self.profile_delete_btn,   1, 5, 1, 2)
+        c1.addWidget(self.cp_template_label,    1, 0)
+        c1.addWidget(self.cp_template_edit,     1, 1, 1, 4)
+        c1.addWidget(self.cp_template_open_btn, 1, 5)
+        c1.addWidget(self.cp_template_browse_btn, 1, 6)
+        c1.addWidget(self.profile_label,        2, 0)
+        c1.addWidget(self.profile_combo,        2, 1, 1, 2)
+        c1.addWidget(self.profile_load_btn,     2, 3)
+        c1.addWidget(self.profile_save_btn,     2, 4)
+        c1.addWidget(self.profile_delete_btn,   2, 5, 1, 2)
         c1.setColumnStretch(1, 1)
         c1.setColumnStretch(2, 1)
         root.addWidget(card1)
@@ -258,7 +293,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.hint_label.setProperty("muted", True)
         c2.addWidget(self.hint_label)
 
-        self.table = QtWidgets.QTableWidget(0, 6)
+        self.table = QtWidgets.QTableWidget(0, 8)
         self.table.verticalHeader().setVisible(True)
         self.table.verticalHeader().setFixedWidth(38)
         # Allow direct row-height editing by dragging the boundary between
@@ -283,11 +318,14 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionsClickable(False)
-        self.table.setColumnWidth(self.COL_USE,   58)
-        self.table.setColumnWidth(self.COL_ORDER, 60)
-        self.table.setColumnWidth(self.COL_OPC,   90)
-        self.table.setColumnWidth(self.COL_NAME,  280)
-        self.table.setColumnWidth(self.COL_ROWS,  290)
+        self.table.setColumnWidth(self.COL_USE,     58)
+        self.table.setColumnWidth(self.COL_USE_CP,  58)
+        self.table.setColumnWidth(self.COL_ORDER,   60)
+        self.table.setColumnWidth(self.COL_OPC,     90)
+        self.table.setColumnWidth(self.COL_NAME,    240)
+        self.table.setColumnWidth(self.COL_ROWS,    290)
+        self.table.setColumnWidth(self.COL_FILE,    200)
+        self.table.setColumnWidth(self.COL_FILE_CP, 200)
         self.table.verticalHeader().setDefaultSectionSize(38)
         self.table.setWordWrap(True)
         self.table.itemChanged.connect(self._on_table_item_changed)
@@ -354,6 +392,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_edit = QtWidgets.QLineEdit()
         self.output_browse_btn = QtWidgets.QPushButton()
         self.output_browse_btn.clicked.connect(self._pick_output)
+
+        self.cp_output_label = QtWidgets.QLabel()
+        self.cp_output_label.setObjectName("SectionLabel")
+        self.cp_output_edit = QtWidgets.QLineEdit()
+        self.cp_output_browse_btn = QtWidgets.QPushButton()
+        self.cp_output_browse_btn.clicked.connect(self._pick_cp_output)
+
         self.history_chk = QtWidgets.QCheckBox()
         self.history_chk.setChecked(True)
         self.open_after_chk = QtWidgets.QCheckBox()
@@ -367,6 +412,12 @@ class MainWindow(QtWidgets.QMainWindow):
         f = self.merge_btn.font(); f.setPointSize(11); f.setBold(True); self.merge_btn.setFont(f)
         self.merge_btn.clicked.connect(self._do_merge)
 
+        self.cp_merge_btn = QtWidgets.QPushButton()
+        self.cp_merge_btn.setMinimumHeight(42)
+        self.cp_merge_btn.setProperty("primary", True)
+        f = self.cp_merge_btn.font(); f.setPointSize(11); f.setBold(True); self.cp_merge_btn.setFont(f)
+        self.cp_merge_btn.clicked.connect(self._do_cp_merge)
+
         self.open_output_btn = QtWidgets.QPushButton()
         self.open_output_btn.setEnabled(False)
         self.open_output_btn.clicked.connect(self._open_last_output)
@@ -378,6 +429,9 @@ class MainWindow(QtWidgets.QMainWindow):
         c3.addWidget(self.output_label,        0, 0)
         c3.addWidget(self.output_edit,         0, 1, 1, 3)
         c3.addWidget(self.output_browse_btn,   0, 4)
+        c3.addWidget(self.cp_output_label,     1, 0)
+        c3.addWidget(self.cp_output_edit,      1, 1, 1, 3)
+        c3.addWidget(self.cp_output_browse_btn, 1, 4)
         opts_row = QtWidgets.QHBoxLayout()
         opts_row.addWidget(self.history_chk)
         opts_row.addSpacing(20)
@@ -385,10 +439,11 @@ class MainWindow(QtWidgets.QMainWindow):
         opts_row.addSpacing(20)
         opts_row.addWidget(self.all_profiles_chk)
         opts_row.addStretch(1)
-        c3.addLayout(opts_row,                 1, 0, 1, 5)
-        c3.addWidget(self.merge_btn,           2, 0, 1, 2)
-        c3.addWidget(self.progress,            2, 2, 1, 2)
-        c3.addWidget(self.open_output_btn,     2, 4)
+        c3.addLayout(opts_row,                 2, 0, 1, 5)
+        c3.addWidget(self.merge_btn,           3, 0, 1, 2)
+        c3.addWidget(self.cp_merge_btn,        3, 2, 1, 2)
+        c3.addWidget(self.progress,            4, 0, 1, 4)
+        c3.addWidget(self.open_output_btn,     4, 4)
         c3.setColumnStretch(1, 1)
         c3.setColumnStretch(2, 1)
         root.addWidget(card3)
@@ -416,6 +471,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_label.setText(t("template_label"))
         self.template_open_btn.setText("📖 " + t("open_template"))
         self.template_browse_btn.setText("📂 " + t("browse"))
+        self.cp_template_label.setText(t("cp_template_label"))
+        self.cp_template_open_btn.setText("📖 " + t("open_template"))
+        self.cp_template_browse_btn.setText("📂 " + t("browse"))
         self.profile_label.setText(t("profile_label"))
         self.profile_load_btn.setText("↩ " + t("load_profile"))
         self.profile_save_btn.setText("💾 " + t("save_profile"))
@@ -431,14 +489,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.invert_btn.setText("↔ " + t("invert"))
         self.output_label.setText(t("output_label"))
         self.output_browse_btn.setText("📂 " + t("browse"))
+        self.cp_output_label.setText(t("cp_output_label"))
+        self.cp_output_browse_btn.setText("📂 " + t("browse"))
         self.history_chk.setText(t("include_history"))
         self.open_after_chk.setText(t("open_after"))
         self.all_profiles_chk.setText(t("all_profiles"))
         self.merge_btn.setText(t("merge_button"))
+        self.cp_merge_btn.setText(t("merge_cp_button"))
         self.open_output_btn.setText("📂 " + t("open_output"))
         self.table.setHorizontalHeaderLabels([
-            t("col_use"), t("col_order"), t("col_opc"),
-            t("col_name"), t("col_rows"), t("col_file"),
+            t("col_use"), t("col_use_cp"), t("col_order"), t("col_opc"),
+            t("col_name"), t("col_rows"), t("col_file"), t("col_file_cp"),
         ])
         self.up_btn.setToolTip(t("move_up"))
         self.down_btn.setToolTip(t("move_down"))
@@ -459,6 +520,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.template_edit.setText(self.app_settings.last_template)
         else:
             for p in sorted(TEMPLATES_DIR.glob("*.xlsx")):
+                if "cp" in p.stem.lower():
+                    continue
                 self.template_edit.setText(str(p))
                 break
         default_out = OUTPUT_DIR / "Merged_PFMEA.xlsx"
@@ -467,17 +530,36 @@ class MainWindow(QtWidgets.QMainWindow):
             self.output_edit.setText(str(candidate))
         else:
             self.output_edit.setText(str(default_out))
+        # Control Plan counterparts
+        if self.app_settings.last_cp_template and Path(self.app_settings.last_cp_template).exists():
+            self.cp_template_edit.setText(self.app_settings.last_cp_template)
+        else:
+            for p in sorted(TEMPLATES_DIR.glob("*.xlsx")):
+                if "cp" in p.stem.lower():
+                    self.cp_template_edit.setText(str(p))
+                    break
+        default_cp_out = OUTPUT_DIR / "Merged_CP.xlsx"
+        if self.app_settings.last_cp_output_dir:
+            candidate = Path(self.app_settings.last_cp_output_dir) / "Merged_CP.xlsx"
+            self.cp_output_edit.setText(str(candidate))
+        else:
+            self.cp_output_edit.setText(str(default_cp_out))
 
     def _save_last(self):
         self.app_settings.last_template = self.template_edit.text()
         p = self.output_edit.text().strip()
         if p:
             self.app_settings.last_output_dir = str(Path(p).parent)
+        self.app_settings.last_cp_template = self.cp_template_edit.text()
+        cp = self.cp_output_edit.text().strip()
+        if cp:
+            self.app_settings.last_cp_output_dir = str(Path(cp).parent)
         self.app_settings.save()
 
     # ---------------------------------------------------- template pick
-    def _open_template(self):
-        path = self.template_edit.text().strip()
+    def _open_template(self, edit: QtWidgets.QLineEdit = None):
+        edit = edit or self.template_edit
+        path = edit.text().strip()
         if path and Path(path).exists():
             self._open_file(path)
         else:
@@ -487,10 +569,12 @@ class MainWindow(QtWidgets.QMainWindow):
             )
 
     def eventFilter(self, watched, event):
-        if watched is getattr(self, "template_edit", None):
-            if event.type() == QtCore.QEvent.Type.MouseButtonDblClick:
-                self._open_template()
-                return True
+        for edit in (getattr(self, "template_edit", None),
+                     getattr(self, "cp_template_edit", None)):
+            if watched is edit:
+                if event.type() == QtCore.QEvent.Type.MouseButtonDblClick:
+                    self._open_template(edit)
+                    return True
         return super().eventFilter(watched, event)
 
     def _pick_template(self):
@@ -504,6 +588,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.template_edit.setText(path)
             self._save_last()
 
+    def _pick_cp_template(self):
+        start = self.cp_template_edit.text() or str(TEMPLATES_DIR)
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, self.tr_.t("cp_template_label"),
+            start,
+            f"{self.tr_.t('excel_files')} (*.xlsx *.xlsm)",
+        )
+        if path:
+            self.cp_template_edit.setText(path)
+            self._save_last()
+
     def _pick_output(self):
         start = self.output_edit.text() or str(OUTPUT_DIR / "Merged_PFMEA.xlsx")
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -515,6 +610,19 @@ class MainWindow(QtWidgets.QMainWindow):
             if not path.lower().endswith(".xlsx"):
                 path += ".xlsx"
             self.output_edit.setText(path)
+            self._save_last()
+
+    def _pick_cp_output(self):
+        start = self.cp_output_edit.text() or str(OUTPUT_DIR / "Merged_CP.xlsx")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, self.tr_.t("cp_output_label"),
+            start,
+            f"{self.tr_.t('excel_files')} (*.xlsx)",
+        )
+        if path:
+            if not path.lower().endswith(".xlsx"):
+                path += ".xlsx"
+            self.cp_output_edit.setText(path)
             self._save_last()
 
     # ---------------------------------------------------- add files/folder
@@ -571,24 +679,35 @@ class MainWindow(QtWidgets.QMainWindow):
     def _add_paths(self, paths: List[str]):
         """
         Read each file, extract stations, append them to self.rows. Skip
-        paths already present. If a profile is loaded, reapply its order
-        and check state to newly-loaded rows too.
+        paths already present. Files are classified by their main sheet:
+        PFMEA files feed the PFMEA columns, Control Plan files are matched
+        to stations by OPC code. If a profile is loaded, its order and
+        check states are reapplied to the newly-loaded rows too.
         """
         skipped: List[str] = []
         added_count = 0
         station_count = 0
         for p in paths:
-            if p in self.workbooks:
+            if p in self.workbooks or p in self.cp_workbooks:
                 continue
             analysis = analyze_workbook(p, self.merge_settings)
-            if not analysis.is_valid:
-                skipped.append(f"{Path(p).name}: {analysis.error}")
+            if analysis.is_valid:
+                self.workbooks[p] = analysis
+                for block in analysis.stations:
+                    self.rows.append(Row(p, block, enabled=True))
+                    station_count += 1
+                added_count += 1
                 continue
-            self.workbooks[p] = analysis
-            for block in analysis.stations:
-                self.rows.append(Row(p, block, enabled=True))
-                station_count += 1
-            added_count += 1
+            # Not a PFMEA workbook -> try it as a Control Plan input.
+            cp_analysis = analyze_workbook(p, self.cp_merge_settings)
+            if cp_analysis.is_valid:
+                self.cp_workbooks[p] = cp_analysis
+                added_count += 1
+                continue
+            skipped.append(f"{Path(p).name}: {analysis.error}")
+
+        # Attach CP stations to rows by OPC (and add CP-only stations).
+        self._attach_cp_stations()
 
         # If a profile is currently selected, apply its order + checks
         profile_name = self.profile_combo.currentText().strip()
@@ -606,15 +725,44 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status.showMessage("● " + self.tr_.t(
             "loaded_files", n=added_count, s=station_count))
 
+    def _attach_cp_stations(self) -> None:
+        """Match loaded CP stations to table rows by OPC code.
+
+        A CP file never overwrites PFMEA data: it only fills the CP side of
+        the matching station. Stations that exist only in CP files appear as
+        extra rows (PFMEA tick off, CP tick on).
+        """
+        by_opc = {str(r.block.opc_code): r for r in self.rows}
+        for path, analysis in self.cp_workbooks.items():
+            for block in analysis.stations:
+                code = str(block.opc_code)
+                row = by_opc.get(code)
+                if row is not None:
+                    if not row.cp_path:
+                        row.cp_path = path
+                        row.cp_block = block
+                    continue
+                # CP-only station: no PFMEA file -> PFMEA tick stays off.
+                display_block = StationBlock(
+                    opc_code=block.opc_code, name=block.name,
+                    start_row=block.start_row, end_row=block.end_row,
+                    source_file=path, order_index=block.order_index,
+                    failure_modes=[],
+                )
+                new_row = Row("", display_block, enabled=False,
+                              cp_path=path, cp_block=block, cp_enabled=True)
+                self.rows.append(new_row)
+                by_opc[code] = new_row
+
     def _refresh_all(self):
         paths = list(self.workbooks.keys())
+        cp_paths = list(self.cp_workbooks.keys())
         # remember enabled state per (path, opc) so refresh keeps checks
         prev_enabled = {(r.path, r.block.opc_code): r.enabled for r in self.rows}
+        prev_cp_enabled = {(r.cp_path, r.block.opc_code): r.cp_enabled for r in self.rows}
         self.workbooks.clear()
+        self.cp_workbooks.clear()
         self.rows.clear()
-        if not paths:
-            self._rebuild_table()
-            return
         for p in paths:
             analysis = analyze_workbook(p, self.merge_settings)
             if not analysis.is_valid:
@@ -625,6 +773,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     p, block,
                     enabled=prev_enabled.get((p, block.opc_code), True),
                 ))
+        for p in cp_paths:
+            cp_analysis = analyze_workbook(p, self.cp_merge_settings)
+            if not cp_analysis.is_valid:
+                continue
+            self.cp_workbooks[p] = cp_analysis
+        self._attach_cp_stations()
+        for r in self.rows:
+            key = (r.cp_path, r.block.opc_code)
+            if r.cp_path and key in prev_cp_enabled:
+                r.cp_enabled = prev_cp_enabled[key]
         profile_name = self.profile_combo.currentText().strip()
         if profile_name:
             profile = pm.load_profile(profile_name)
@@ -642,8 +800,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if ans != QtWidgets.QMessageBox.StandardButton.Yes:
                 return
         self.workbooks.clear()
+        self.cp_workbooks.clear()
         self.rows.clear()
         self._missing_opcs.clear()
+        self._cp_missing_opcs.clear()
         self._missing_timer.stop()
         self._rebuild_table()
         self.status.showMessage("● " + self.tr_.t("ready"))
@@ -688,6 +848,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Apply profile visibility/order and add placeholders for missing files."""
         order_map = {s.opc: i for i, s in enumerate(profile.stations)}
         enabled_map = {s.opc: s.enabled for s in profile.stations}
+        cp_enabled_map = {s.opc: s.cp_enabled for s in profile.stations}
         self._hidden_stations = set(profile.hidden_stations)
         self._missing_opcs = set()
         # Remove stale placeholders once the user loads a real matching file.
@@ -699,16 +860,44 @@ class MainWindow(QtWidgets.QMainWindow):
             if code in self._hidden_stations or code in known_codes:
                 continue
             # Empty path marks a profile station whose input file is absent.
-            self.rows.append(Row("", StationBlock(code, entry.name, 0, -1), enabled=False))
+            self.rows.append(Row("", StationBlock(code, entry.name, 0, -1),
+                                 enabled=False,
+                                 cp_enabled=entry.cp_enabled))
             self._missing_opcs.add(code)
         for r in self.rows:
             code = str(r.block.opc_code)
             if code in enabled_map:
                 r.enabled = enabled_map[code] and code not in self._hidden_stations
+            if code in cp_enabled_map:
+                r.cp_enabled = cp_enabled_map[code] and code not in self._hidden_stations
         self.rows = [r for r in self.rows if str(r.block.opc_code) not in self._hidden_stations]
         self.rows.sort(key=lambda r: order_map.get(str(r.block.opc_code), 10_000))
-        if self._missing_opcs:
+        self._update_cp_missing()
+        if self._missing_opcs or self._cp_missing_opcs:
             self._missing_timer.start()
+        else:
+            self._missing_timer.stop()
+
+    def _update_cp_missing(self) -> None:
+        """Track profile stations whose CP input file is not loaded."""
+        self._cp_missing_opcs = {
+            str(r.block.opc_code) for r in self.rows if not r.cp_path
+        }
+
+    def _make_use_item(self, checked: bool) -> QtWidgets.QTableWidgetItem:
+        """A text checkbox item whose whole cell responds to a click."""
+        chk = QtWidgets.QTableWidgetItem()
+        chk.setFlags(
+            QtCore.Qt.ItemFlag.ItemIsEnabled
+            | QtCore.Qt.ItemFlag.ItemIsSelectable
+        )
+        chk.setText("☑" if checked else "☐")
+        chk.setData(QtCore.Qt.ItemDataRole.UserRole, checked)
+        chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        chk_font = chk.font(); chk_font.setPointSize(14); chk_font.setBold(True)
+        chk.setFont(chk_font)
+        chk.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
+        return chk
 
     def _rebuild_table(self):
         self._layout_sync = True
@@ -737,20 +926,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.setColumnWidth(self.COL_ROWS, failure_width)
 
         for i, r in enumerate(self.rows):
-            chk = QtWidgets.QTableWidgetItem()
-            # Use a text checkbox so the complete cell responds to a click.
-            # A native QTableWidget checkbox only responds to its tiny box.
-            chk.setFlags(
-                QtCore.Qt.ItemFlag.ItemIsEnabled
-                | QtCore.Qt.ItemFlag.ItemIsSelectable
-            )
-            chk.setText("☑" if r.enabled else "☐")
-            chk.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
-            chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-            chk_font = chk.font(); chk_font.setPointSize(14); chk_font.setBold(True)
-            chk.setFont(chk_font)
-            chk.setForeground(QtGui.QColor("#7d72ff" if r.enabled else "#687992"))
-            self.table.setItem(i, self.COL_USE, chk)
+            self.table.setItem(i, self.COL_USE, self._make_use_item(r.enabled))
+            self.table.setItem(i, self.COL_USE_CP, self._make_use_item(r.cp_enabled))
 
             order_item = QtWidgets.QTableWidgetItem(str(i + 1))
             order_item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -810,9 +987,24 @@ class MainWindow(QtWidgets.QMainWindow):
             if not r.path:
                 file_item.setBackground(QtGui.QColor("#4a2928"))
             self.table.setItem(i, self.COL_FILE, file_item)
+
+            cp_file_text = (Path(r.cp_path).name if r.cp_path
+                            else self.tr_.t("cp_file_missing"))
+            cp_file_item = QtWidgets.QTableWidgetItem(cp_file_text)
+            cp_file_item.setToolTip(r.cp_path or self.tr_.t("cp_file_missing"))
+            cp_file_item.setForeground(
+                QtGui.QColor("#ff9a65" if not r.cp_path else "#b9c7ff"))
+            if not r.cp_path:
+                cp_file_item.setBackground(QtGui.QColor("#4a2928"))
+            self.table.setItem(i, self.COL_FILE_CP, cp_file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
         self._layout_sync = False
+        self._update_cp_missing()
+        if self._missing_opcs or self._cp_missing_opcs:
+            self._missing_timer.start()
+        else:
+            self._missing_timer.stop()
         self._update_counts()
 
     def _on_row_resized(self, row: int, _old_size: int, new_size: int):
@@ -838,34 +1030,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_counts()
 
     def _on_use_cell_clicked(self, row: int, col: int):
-        """Toggle a station by clicking anywhere in its USE cell."""
-        if col != self.COL_USE or not (0 <= row < len(self.rows)):
+        """Toggle a station by clicking anywhere in its USE cells."""
+        if not (0 <= row < len(self.rows)):
             return
-        self.rows[row].enabled = not self.rows[row].enabled
-        it = self.table.item(row, self.COL_USE)
+        if col == self.COL_USE:
+            self.rows[row].enabled = not self.rows[row].enabled
+            self._sync_use_cell(row, self.COL_USE, self.rows[row].enabled)
+            self._update_counts()
+        elif col == self.COL_USE_CP:
+            self.rows[row].cp_enabled = not self.rows[row].cp_enabled
+            self._sync_use_cell(row, self.COL_USE_CP, self.rows[row].cp_enabled)
+            self._update_counts()
+
+    def _sync_use_cell(self, row: int, col: int, checked: bool):
+        it = self.table.item(row, col)
         if it is not None:
             self._suspend_checks = True
-            it.setText("☑" if self.rows[row].enabled else "☐")
-            it.setData(QtCore.Qt.ItemDataRole.UserRole, self.rows[row].enabled)
-            it.setForeground(QtGui.QColor("#7d72ff" if self.rows[row].enabled else "#687992"))
+            it.setText("☑" if checked else "☐")
+            it.setData(QtCore.Qt.ItemDataRole.UserRole, checked)
+            it.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
             self._suspend_checks = False
-        self._update_counts()
 
     def _on_cell_double_clicked(self, row: int, col: int):
         """Open an input workbook when its file cell is double-clicked."""
-        if col != self.COL_FILE or not (0 <= row < len(self.rows)):
+        if not (0 <= row < len(self.rows)):
             return
-        path = self.rows[row].path
-        if Path(path).exists():
-            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        if col == self.COL_FILE:
+            path = self.rows[row].path
+            if path and Path(path).exists():
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
+        elif col == self.COL_FILE_CP:
+            path = self.rows[row].cp_path
+            if path and Path(path).exists():
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
 
     def _update_counts(self):
         total = len(self.rows)
         selected = sum(1 for r in self.rows if r.enabled)
+        cp_selected = sum(1 for r in self.rows if r.cp_enabled)
         if self.tr_.is_rtl():
-            self.count_label.setText(f"انتخاب‌شده: {selected} از {total}")
+            self.count_label.setText(
+                f"PFMEA: {selected} از {total}    |    CP: {cp_selected} از {total}")
         else:
-            self.count_label.setText(f"Selected: {selected} / {total}")
+            self.count_label.setText(
+                f"PFMEA: {selected} / {total}    |    CP: {cp_selected} / {total}")
 
     def _set_missing_row_background(self, row_index: int, alert: bool):
         for col in range(self.table.columnCount()):
@@ -881,9 +1089,13 @@ class MainWindow(QtWidgets.QMainWindow):
             elif col == self.COL_ROWS:
                 item.setBackground(QtGui.QColor("#422331"))
                 item.setForeground(QtGui.QColor("#e58a9c"))
-            elif col == self.COL_FILE:
+            elif col == self.COL_FILE or col == self.COL_FILE_CP:
                 item.setBackground(QtGui.QColor("#4a2928"))
                 item.setForeground(QtGui.QColor("#ff9a65"))
+            elif col == self.COL_USE or col == self.COL_USE_CP:
+                checked = bool(item.data(QtCore.Qt.ItemDataRole.UserRole))
+                item.setBackground(QtGui.QBrush())
+                item.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
             else:
                 item.setBackground(QtGui.QBrush())
                 item.setForeground(QtGui.QColor("#eef4ff"))
@@ -891,8 +1103,32 @@ class MainWindow(QtWidgets.QMainWindow):
     def _blink_missing_rows(self):
         self._blink_on = not self._blink_on
         for i, row in enumerate(self.rows):
-            if str(row.block.opc_code) in self._missing_opcs:
+            code = str(row.block.opc_code)
+            if code in self._missing_opcs:
+                # Whole row: the profile station's PFMEA input is not loaded.
                 self._set_missing_row_background(i, self._blink_on)
+            elif code in self._cp_missing_opcs:
+                # Only the CP side warns; the PFMEA side stays untouched.
+                self._set_cp_missing_cells(i, self._blink_on)
+
+    def _set_cp_missing_cells(self, row_index: int, alert: bool):
+        """Blink only the CP file cell (and its USE_CP cell) of a row."""
+        pairs = ((self.COL_FILE_CP, "#4a2928", "#ff9a65"),
+                 (self.COL_USE_CP, "#4a2928", "#ffe0c2"))
+        for col, bg, fg in pairs:
+            item = self.table.item(row_index, col)
+            if item is None:
+                continue
+            if alert:
+                item.setBackground(QtGui.QColor(bg))
+                item.setForeground(QtGui.QColor(fg))
+            elif col == self.COL_FILE_CP:
+                item.setBackground(QtGui.QColor("#4a2928"))
+                item.setForeground(QtGui.QColor("#ff9a65"))
+            else:
+                checked = bool(item.data(QtCore.Qt.ItemDataRole.UserRole))
+                item.setBackground(QtGui.QBrush())
+                item.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
 
     def _set_all(self, checked: bool):
         for r in self.rows:
@@ -912,6 +1148,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 it.setText("☑" if r.enabled else "☐")
                 it.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
                 it.setForeground(QtGui.QColor("#7d72ff" if r.enabled else "#687992"))
+            cp_it = self.table.item(i, self.COL_USE_CP)
+            if cp_it:
+                cp_it.setText("☑" if r.cp_enabled else "☐")
+                cp_it.setData(QtCore.Qt.ItemDataRole.UserRole, r.cp_enabled)
+                cp_it.setForeground(
+                    QtGui.QColor("#7d72ff" if r.cp_enabled else "#687992"))
         self._suspend_checks = False
         self._update_counts()
 
@@ -989,10 +1231,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _current_profile_signature(self) -> str:
         state = {
             "template": self.template_edit.text(),
+            "cp_template": self.cp_template_edit.text(),
             "settings": self.merge_settings.to_dict(),
+            "cp_settings": self.cp_merge_settings.to_dict(),
             "row_heights": self._row_heights,
             "stations": [
-                {"opc": str(r.block.opc_code), "enabled": r.enabled}
+                {"opc": str(r.block.opc_code), "enabled": r.enabled,
+                 "cp_enabled": r.cp_enabled}
                 for r in self.rows
             ],
         }
@@ -1035,8 +1280,12 @@ class MainWindow(QtWidgets.QMainWindow):
             return False
         if profile.template_path and Path(profile.template_path).exists():
             self.template_edit.setText(profile.template_path)
+        if profile.cp_template_path and Path(profile.cp_template_path).exists():
+            self.cp_template_edit.setText(profile.cp_template_path)
         if profile.settings:
             self.merge_settings = profile.settings
+        if profile.cp_settings:
+            self.cp_merge_settings = profile.cp_settings
         self._row_heights = dict(profile.row_heights)
         # Recreate the full loaded station list before applying this profile;
         # stations hidden in another profile must remain available here.
@@ -1046,6 +1295,7 @@ class MainWindow(QtWidgets.QMainWindow):
                            for block in analysis.stations)
         if restored:
             self.rows = restored
+            self._attach_cp_stations()
         if profile.stations and self.rows:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()
@@ -1056,7 +1306,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _save_profile_data(self, name: str) -> None:
         stations = [
             pm.StationEntry(opc=str(r.block.opc_code),
-                            name=str(r.block.name), enabled=r.enabled)
+                            name=str(r.block.name), enabled=r.enabled,
+                            cp_enabled=r.cp_enabled)
             for r in self.rows
         ]
         product_name = ""
@@ -1066,10 +1317,13 @@ class MainWindow(QtWidgets.QMainWindow):
             product_code = product_code or analysis.product_code
         pm.save_profile(pm.ProductProfile(
             name=name, product_name=product_name, product_code=product_code,
-            template_path=self.template_edit.text(), stations=stations,
+            template_path=self.template_edit.text(),
+            cp_template_path=self.cp_template_edit.text(),
+            stations=stations,
             row_heights=dict(self._row_heights),
             hidden_stations=sorted(self._hidden_stations),
             settings=self.merge_settings,
+            cp_settings=self.cp_merge_settings,
         ))
         self._profile_snapshot = self._current_profile_signature()
 
@@ -1121,6 +1375,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 opc=str(r.block.opc_code),
                 name=str(r.block.name),
                 enabled=r.enabled,
+                cp_enabled=r.cp_enabled,
             )
             for r in self.rows
         ]
@@ -1136,10 +1391,12 @@ class MainWindow(QtWidgets.QMainWindow):
             product_name=product_name,
             product_code=product_code,
             template_path=self.template_edit.text(),
+            cp_template_path=self.cp_template_edit.text(),
             stations=stations,
             row_heights=dict(self._row_heights),
             hidden_stations=sorted(self._hidden_stations),
             settings=self.merge_settings,
+            cp_settings=self.cp_merge_settings,
         )
         pm.save_profile(profile)
         self._profile_snapshot = self._current_profile_signature()
@@ -1204,6 +1461,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.merge_settings = MergeSettings.from_dict(
                 self.app_settings.saved_merge_settings
             )
+            saved_cp = self.app_settings.saved_cp_merge_settings
+            if isinstance(saved_cp, dict) and saved_cp:
+                cp_settings = MergeSettings.from_dict(saved_cp)
+                self.cp_merge_settings = cp_settings if cp_settings.doc_type == "cp" \
+                    else default_cp_settings()
+            else:
+                self.cp_merge_settings = default_cp_settings()
             self._restore_last()
             self._profile_change_guard = True
             self.profile_combo.setCurrentIndex(0)
@@ -1267,10 +1531,13 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---------------------------------------------------------- settings
     def _open_settings(self):
         try:
-            dlg = SettingsDialog(self, self.tr_, self.merge_settings, self.app_settings)
+            dlg = SettingsDialog(self, self.tr_, self.merge_settings,
+                                 self.app_settings, self.cp_merge_settings)
             if dlg.exec() == QtWidgets.QDialog.DialogCode.Accepted:
-                self.merge_settings, self.app_settings = dlg.apply_to()
+                (self.merge_settings, self.cp_merge_settings,
+                 self.app_settings) = dlg.apply_to()
                 self.app_settings.saved_merge_settings = self.merge_settings.to_dict()
+                self.app_settings.saved_cp_merge_settings = self.cp_merge_settings.to_dict()
                 self.app_settings.save()
                 self.tr_.set_lang(self.app_settings.language)
                 self._apply_language()
@@ -1294,7 +1561,20 @@ class MainWindow(QtWidgets.QMainWindow):
             self.open_after_chk.setChecked(False)
 
     def _do_merge(self):
-        template = self.template_edit.text().strip()
+        self._start_merge("pfmea")
+
+    def _do_cp_merge(self):
+        self._start_merge("cp")
+
+    def _start_merge(self, doc_type: str):
+        """Build and run merge job(s) for 'pfmea' or 'cp' outputs."""
+        is_cp = doc_type == "cp"
+        template = (self.cp_template_edit if is_cp else self.template_edit).text().strip()
+        output_edit = self.cp_output_edit if is_cp else self.output_edit
+        settings = self.cp_merge_settings if is_cp else self.merge_settings
+        default_output = OUTPUT_DIR / ("Merged_CP.xlsx" if is_cp else "Merged_PFMEA.xlsx")
+        doc_label = "CP" if is_cp else "PFMEA"
+
         if not template:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_template"))
@@ -1308,25 +1588,44 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_files"))
             return
+
+        # Ticked stations without their input file block ONLY this document
+        # type; the other output stays unaffected.
+        missing = [
+            f"\u2611 {r.block.opc_code} - {str(r.block.name).strip()}"
+            for r in self.rows
+            if (r.cp_enabled if is_cp else r.enabled)
+            and not ((r.cp_path if is_cp else r.path) or "")
+        ]
+        if missing:
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_.t("warning"),
+                self.tr_.t("missing_inputs_block", doc=doc_label,
+                           names="\n".join(missing[:12])))
+            return
+
         selections: List[Tuple[str, StationBlock]] = [
-            (r.path, r.block) for r in self.rows
-            if r.enabled and r.path and Path(r.path).exists()
+            ((r.cp_path, r.cp_block) if is_cp else (r.path, r.block))
+            for r in self.rows
+            if (r.cp_enabled if is_cp else r.enabled)
+            and (r.cp_path if is_cp else r.path)
+            and Path(r.cp_path if is_cp else r.path).exists()
         ]
         if not selections:
             QtWidgets.QMessageBox.warning(
                 self, self.tr_.t("warning"), self.tr_.t("no_selection"))
             return
 
-        output = self.output_edit.text().strip()
+        output = output_edit.text().strip()
         if not output:
-            output = str(OUTPUT_DIR / "Merged_PFMEA.xlsx")
-            self.output_edit.setText(output)
+            output = str(default_output)
+            output_edit.setText(output)
         if not output.lower().endswith(".xlsx"):
             output += ".xlsx"
-            self.output_edit.setText(output)
+            output_edit.setText(output)
 
         # Build one job for normal mode, or one ordered job per profile.
-        jobs = [(template, selections, output, self.merge_settings,
+        jobs = [(template, selections, output, settings,
                  self.history_chk.isChecked())]
         if self.all_profiles_chk.isChecked():
             jobs = []
@@ -1335,11 +1634,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 if profile is None:
                     continue
                 order_map = {s.opc: i for i, s in enumerate(profile.stations)}
-                enabled = {s.opc for s in profile.stations if s.enabled}
+                enabled = {s.opc for s in profile.stations
+                           if (s.cp_enabled if is_cp else s.enabled)}
                 profile_selections = [
-                    (r.path, r.block) for r in self.rows
+                    ((r.cp_path, r.cp_block) if is_cp else (r.path, r.block))
+                    for r in self.rows
                     if str(r.block.opc_code) in enabled
-                    and r.path and Path(r.path).exists()
+                    and (r.cp_path if is_cp else r.path)
+                    and Path(r.cp_path if is_cp else r.path).exists()
                 ]
                 profile_selections.sort(
                     key=lambda pair: order_map.get(str(pair[1].opc_code), 10_000)
@@ -1364,8 +1666,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         f"{Path(output).stem}_{safe_name}_{suffix}{Path(output).suffix}"
                     ))
                     suffix += 1
+                profile_settings = profile.cp_settings if is_cp else profile.settings
                 jobs.append((template, profile_selections, profile_output,
-                             profile.settings, self.history_chk.isChecked()))
+                             profile_settings, self.history_chk.isChecked()))
             if not jobs:
                 QtWidgets.QMessageBox.warning(
                     self, self.tr_.t("warning"), self.tr_.t("no_selection"))
@@ -1373,9 +1676,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         existing = [job[2] for job in jobs if Path(job[2]).exists()]
         if existing:
-            shown = "\\n".join(existing[:8])
+            shown = "\n".join(existing[:8])
             if len(existing) > 8:
-                shown += "\\n..."
+                shown += "\n..."
             ans = QtWidgets.QMessageBox.question(
                 self, self.tr_.t("confirm"),
                 self.tr_.t("overwrite_output", path=shown),
@@ -1384,13 +1687,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 return
 
         self.merge_btn.setEnabled(False)
+        self.cp_merge_btn.setEnabled(False)
         self.open_output_btn.setEnabled(False)
         self.progress.setValue(0)
-        self.status.showMessage("● " + self.tr_.t("processing"))
+        self.status.showMessage("\u25cf " + self.tr_.t("processing"))
         self._save_last()
 
         self._worker = MergeWorker(
-            template, selections, output, self.merge_settings,
+            template, selections, output, settings,
             self.history_chk.isChecked(), jobs=jobs,
         )
         self._worker.progress.connect(self._on_progress)
@@ -1405,6 +1709,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_finished(self, out_path: str):
         self.merge_btn.setEnabled(True)
+        self.cp_merge_btn.setEnabled(True)
         self.progress.setValue(100)
         self._last_output = out_path
         self.open_output_btn.setEnabled(True)
@@ -1481,6 +1786,7 @@ class MainWindow(QtWidgets.QMainWindow):
         t = self.tr_.t
         menu = QtWidgets.QMenu(self)
         act_toggle = menu.addAction("☑ " + t("toggle"))
+        act_toggle_cp = menu.addAction("☑ " + t("toggle_cp"))
         act_check = menu.addAction("☑ " + t("select_all"))
         act_uncheck = menu.addAction("☐ " + t("deselect_all"))
         menu.addSeparator()
@@ -1492,6 +1798,7 @@ class MainWindow(QtWidgets.QMainWindow):
         act_del = menu.addAction("🗑 " + t("remove_selected"))
         chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
         if chosen is act_toggle: self._toggle_selected()
+        elif chosen is act_toggle_cp: self._toggle_selected_cp()
         elif chosen is act_check:
             for r in rows: self.rows[r].enabled = True
             self._sync_checks_from_model()
@@ -1510,6 +1817,14 @@ class MainWindow(QtWidgets.QMainWindow):
         for r in rows:
             if 0 <= r < len(self.rows):
                 self.rows[r].enabled = not self.rows[r].enabled
+        self._sync_checks_from_model()
+
+    def _toggle_selected_cp(self):
+        rows = self._selected_row_indices()
+        if not rows: return
+        for r in rows:
+            if 0 <= r < len(self.rows):
+                self.rows[r].cp_enabled = not self.rows[r].cp_enabled
         self._sync_checks_from_model()
 
     # ----------------------------------------------------- drag & drop
@@ -1534,6 +1849,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_failed(self, err: str):
         self.merge_btn.setEnabled(True)
+        self.cp_merge_btn.setEnabled(True)
         self.status.showMessage("● " + self.tr_.t("ready"))
         # Show short error at top, full traceback in Details
         first_line = err.splitlines()[0] if err else "unknown error"

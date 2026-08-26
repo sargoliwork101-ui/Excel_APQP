@@ -32,6 +32,21 @@ from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last
 # ---------------------------------------------------------------------------
 # helpers to copy formatting
 
+def _resolve_sheet_name(wb, wanted: str) -> Optional[str]:
+    """Find a sheet by name, tolerating trailing spaces and letter case.
+
+    Real-world files use names like 'برنامه کنترل  ' (trailing spaces) or
+    'History  '; an exact lookup would miss them.
+    """
+    if wanted in wb.sheetnames:
+        return wanted
+    target = wanted.strip().lower()
+    for name in wb.sheetnames:
+        if name.strip().lower() == target:
+            return name
+    return None
+
+
 def _copy_cell(src_cell, dst_cell, row_offset: int = 0) -> None:
     """Copy a cell while remapping styles and relative formula references."""
     value = src_cell.value
@@ -436,9 +451,9 @@ def merge_pfmea(
     report(1, "Loading template...")
     template_wb = openpyxl.load_workbook(template_path, keep_links=False)
 
-    tpl_sheet_name = settings.sheet_name
-    if tpl_sheet_name not in template_wb.sheetnames:
-        raise ValueError(f"Template does not contain sheet '{tpl_sheet_name}'")
+    tpl_sheet_name = _resolve_sheet_name(template_wb, settings.sheet_name)
+    if tpl_sheet_name is None:
+        raise ValueError(f"Template does not contain sheet '{settings.sheet_name}'")
     tpl_ws = template_wb[tpl_sheet_name]
 
     tpl_analysis = analyze_workbook(template_path, settings)
@@ -476,8 +491,7 @@ def merge_pfmea(
         if src_path not in src_cache:
             src_cache[src_path] = openpyxl.load_workbook(src_path, keep_links=False)
         src_wb = src_cache[src_path]
-        sheet = tpl_sheet_name if tpl_sheet_name in src_wb.sheetnames \
-            else src_wb.sheetnames[0]
+        sheet = _resolve_sheet_name(src_wb, tpl_sheet_name) or src_wb.sheetnames[0]
         src_ws = src_wb[sheet]
         rows = _copy_row_range(
             src_ws, out_ws,
@@ -500,13 +514,17 @@ def merge_pfmea(
 
     # AQ2 is a template formula, so its source range and percentage must be
     # recalculated for the rows that actually made it into this output.
+    # These formulas are PFMEA-specific: a Control Plan has no SO/RPN/AQ2
+    # cells at all and must never receive them.
     data_end = write_row - 1
-    _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end, settings)
-    _update_rpn_formula(
-        out_ws, settings.data_start_row, data_end,
-        max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
-        settings,
-    )
+    is_pfmea = getattr(settings, "doc_type", "pfmea") == "pfmea"
+    if is_pfmea:
+        _rewrite_so_rpn_formulas(out_ws, settings.data_start_row, data_end, settings)
+        _update_rpn_formula(
+            out_ws, settings.data_start_row, data_end,
+            max(1, min(100, int(getattr(settings, "rpn_top_percent", 20)))),
+            settings,
+        )
     # Conditional-format rules refer to differential styles by dxfId. Since
     # the output workbook is created from scratch, copy that style table too;
     # otherwise the rules can exist in XML but render with no formatting.

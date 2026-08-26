@@ -4,7 +4,7 @@ Settings dialog: header rows / columns / footer markers / language.
 from PyQt6 import QtCore, QtWidgets
 from openpyxl.utils import get_column_letter, column_index_from_string
 
-from ..core.config import MergeSettings, AppSettings
+from ..core.config import MergeSettings, AppSettings, default_cp_settings
 from ..core.i18n import Translator
 
 
@@ -24,11 +24,15 @@ def _letter_to_col(letter: str) -> int:
 
 class SettingsDialog(QtWidgets.QDialog):
     def __init__(self, parent, translator: Translator,
-                 merge_settings: MergeSettings, app_settings: AppSettings):
+                 merge_settings: MergeSettings, app_settings: AppSettings,
+                 cp_settings: MergeSettings = None):
         super().__init__(parent)
         self.tr_ = translator
         self.merge_settings = merge_settings
         self.app_settings = app_settings
+        # Control Plan has its own independent settings object.
+        self.cp_settings = cp_settings if cp_settings is not None \
+            else default_cp_settings()
 
         self.setWindowTitle(self.tr_.t("settings_title"))
         self.setLayoutDirection(
@@ -39,6 +43,11 @@ class SettingsDialog(QtWidgets.QDialog):
         self._load_values()
 
     # ------------------------------------------------------------------
+    def _active(self) -> MergeSettings:
+        """The settings object currently being edited (PFMEA or CP)."""
+        data = self.doc_combo.currentData() if hasattr(self, "doc_combo") else "pfmea"
+        return self.cp_settings if data == "cp" else self.merge_settings
+
     def _build_ui(self):
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(16, 14, 16, 14)
@@ -52,6 +61,7 @@ class SettingsDialog(QtWidgets.QDialog):
         card.setObjectName("Card")
         outer.addWidget(card, 1)
         form = QtWidgets.QFormLayout(card)
+        self.form = form
         form.setContentsMargins(14, 12, 14, 12)
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(10)
@@ -109,6 +119,13 @@ class SettingsDialog(QtWidgets.QDialog):
         self.lang_combo.addItem("فارسی", "fa")
         self.lang_combo.addItem("English", "en")
 
+        # Document type switcher: PFMEA and CP keep separate settings.
+        self.doc_combo = QtWidgets.QComboBox()
+        self.doc_combo.addItem("PFMEA", "pfmea")
+        self.doc_combo.addItem("Control Plan (CP)", "cp")
+        self.doc_combo.currentIndexChanged.connect(self._on_doc_type_changed)
+
+        form.addRow(self.tr_.t("doc_type_lbl"), self.doc_combo)
         form.addRow(self.tr_.t("language_lbl"), self.lang_combo)
         form.addRow(self.tr_.t("sheet_name_lbl"), self.sheet_edit)
         form.addRow(self.tr_.t("history_sheet_lbl"), self.history_edit)
@@ -124,6 +141,18 @@ class SettingsDialog(QtWidgets.QDialog):
         form.addRow(self.tr_.t("rpn_col_lbl"), self.rpn_col_edit)
         form.addRow(self.tr_.t("aq2_cell_lbl"), self.aq2_cell_edit)
         form.addRow(self.tr_.t("footer_markers_lbl"), self.footer_edit)
+
+        # PFMEA-only fields (SO/RPN/AQ2 formulas and failure-mode layout) do
+        # not apply to Control Plan; their rows hide when CP is selected.
+        self._pfmea_only_widgets = (
+            self.rpn_top_percent_spin,
+            self.failure_row_height_spin,
+            self.failure_column_width_spin,
+            self.failure_mode_col_edit,
+            self.so_col_edit,
+            self.rpn_col_edit,
+            self.aq2_cell_edit,
+        )
 
         settings_tools = QtWidgets.QHBoxLayout()
         self.save_defaults_btn = QtWidgets.QPushButton(self.tr_.t("save_settings"))
@@ -150,57 +179,88 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setMinimumSize(520, 650)
 
     # ------------------------------------------------------------------
+    def _on_doc_type_changed(self):
+        # Apply pending edits to the previous type is not needed here:
+        # values are only committed via apply_to()/save on the active type.
+        self._load_values()
+
+    def _apply_doc_visibility(self):
+        is_cp = self.doc_combo.currentData() == "cp"
+        for w in getattr(self, "_pfmea_only_widgets", ()):
+            try:
+                self.form.setRowVisible(w, not is_cp)
+            except Exception:
+                w.setEnabled(not is_cp)
+
     def _load_values(self):
-        self.header_rows_spin.setValue(self.merge_settings.header_rows)
-        self.data_start_spin.setValue(self.merge_settings.data_start_row)
-        self.rpn_top_percent_spin.setValue(self.merge_settings.rpn_top_percent)
-        self.failure_row_height_spin.setValue(self.merge_settings.failure_row_height)
-        self.failure_column_width_spin.setValue(self.merge_settings.failure_column_width)
-        self.opc_col_edit.setText(_col_to_letter(self.merge_settings.opc_column))
-        self.name_col_edit.setText(_col_to_letter(self.merge_settings.name_column))
-        self.failure_mode_col_edit.setText(_col_to_letter(self.merge_settings.failure_mode_column))
-        self.so_col_edit.setText(_col_to_letter(self.merge_settings.so_column))
-        self.rpn_col_edit.setText(_col_to_letter(self.merge_settings.rpn_column))
-        self.aq2_cell_edit.setText(self.merge_settings.aq2_cell)
-        self.sheet_edit.setText(self.merge_settings.sheet_name)
-        self.history_edit.setText(self.merge_settings.history_sheet)
-        markers = self.merge_settings.footer_markers
+        s = self._active()
+        self.header_rows_spin.setValue(s.header_rows)
+        self.data_start_spin.setValue(s.data_start_row)
+        self.rpn_top_percent_spin.setValue(s.rpn_top_percent)
+        self.failure_row_height_spin.setValue(s.failure_row_height)
+        self.failure_column_width_spin.setValue(s.failure_column_width)
+        self.opc_col_edit.setText(_col_to_letter(s.opc_column))
+        self.name_col_edit.setText(_col_to_letter(s.name_column))
+        self.failure_mode_col_edit.setText(_col_to_letter(s.failure_mode_column))
+        self.so_col_edit.setText(_col_to_letter(s.so_column))
+        self.rpn_col_edit.setText(_col_to_letter(s.rpn_column))
+        self.aq2_cell_edit.setText(s.aq2_cell)
+        self.sheet_edit.setText(s.sheet_name)
+        self.history_edit.setText(s.history_sheet)
+        markers = s.footer_markers
         if not isinstance(markers, list):
             markers = []
         self.footer_edit.setPlainText("\n".join(str(m) for m in markers))
         idx = self.lang_combo.findData(self.app_settings.language)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
+        self._apply_doc_visibility()
 
     def _save_defaults(self):
         self.apply_to()
-        self.app_settings.saved_merge_settings = self.merge_settings.to_dict()
+        if self._active() is self.cp_settings:
+            self.app_settings.saved_cp_merge_settings = self.cp_settings.to_dict()
+        else:
+            self.app_settings.saved_merge_settings = self.merge_settings.to_dict()
         self.app_settings.save()
 
     def _restore_defaults(self):
+        if self._active() is self.cp_settings:
+            saved = self.app_settings.saved_cp_merge_settings
+            if saved:
+                cp = MergeSettings.from_dict(saved)
+                if cp.doc_type == "cp":
+                    self.cp_settings = cp
+            self._load_values()
+            return
         saved = self.app_settings.saved_merge_settings
         if saved:
             self.merge_settings = MergeSettings.from_dict(saved)
-            self._load_values()
+        self._load_values()
 
-    def apply_to(self) -> tuple[MergeSettings, AppSettings]:
-        self.merge_settings.header_rows = self.header_rows_spin.value()
-        self.merge_settings.data_start_row = self.data_start_spin.value()
-        self.merge_settings.rpn_top_percent = self.rpn_top_percent_spin.value()
-        self.merge_settings.failure_row_height = self.failure_row_height_spin.value()
-        self.merge_settings.failure_column_width = self.failure_column_width_spin.value()
-        self.merge_settings.opc_column = _letter_to_col(self.opc_col_edit.text())
-        self.merge_settings.name_column = _letter_to_col(self.name_col_edit.text())
-        self.merge_settings.failure_mode_column = _letter_to_col(self.failure_mode_col_edit.text())
-        self.merge_settings.so_column = _letter_to_col(self.so_col_edit.text())
-        self.merge_settings.rpn_column = _letter_to_col(self.rpn_col_edit.text())
-        self.merge_settings.aq2_cell = self.aq2_cell_edit.text().strip().upper() or "AQ2"
-        self.merge_settings.sheet_name = self.sheet_edit.text().strip() or "PFMEA"
-        self.merge_settings.history_sheet = self.history_edit.text().strip() or "History"
+    def apply_to(self) -> tuple[MergeSettings, MergeSettings, AppSettings]:
+        s = self._active()
+        s.header_rows = self.header_rows_spin.value()
+        s.data_start_row = self.data_start_spin.value()
+        s.rpn_top_percent = self.rpn_top_percent_spin.value()
+        s.failure_row_height = self.failure_row_height_spin.value()
+        s.failure_column_width = self.failure_column_width_spin.value()
+        s.opc_column = _letter_to_col(self.opc_col_edit.text())
+        s.name_column = _letter_to_col(self.name_col_edit.text())
+        s.failure_mode_column = _letter_to_col(self.failure_mode_col_edit.text())
+        s.so_column = _letter_to_col(self.so_col_edit.text())
+        s.rpn_column = _letter_to_col(self.rpn_col_edit.text())
+        s.aq2_cell = self.aq2_cell_edit.text().strip().upper() or "AQ2"
+        if s is self.cp_settings:
+            s.sheet_name = self.sheet_edit.text().strip() or "برنامه کنترل"
+            s.history_sheet = self.history_edit.text().strip() or "تغییرات"
+        else:
+            s.sheet_name = self.sheet_edit.text().strip() or "PFMEA"
+            s.history_sheet = self.history_edit.text().strip() or "History"
         markers = [
             m.strip() for m in self.footer_edit.toPlainText().splitlines()
             if m.strip()
         ]
-        self.merge_settings.footer_markers = markers
+        s.footer_markers = markers
         self.app_settings.language = self.lang_combo.currentData() or "fa"
-        return self.merge_settings, self.app_settings
+        return self.merge_settings, self.cp_settings, self.app_settings

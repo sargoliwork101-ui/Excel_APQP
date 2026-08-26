@@ -10,6 +10,7 @@ STRINGS = {
 
     # ---- top toolbar
     "template_label": {"fa": "فایل قالب:", "en": "Template File:"},
+    "cp_template_label": {"fa": "فایل قالب CP:", "en": "CP Template File:"},
     "browse": {"fa": "انتخاب...", "en": "Browse..."},
     "open_template": {"fa": "باز کردن", "en": "Open"},
     "about": {"fa": "درباره ما", "en": "About"},
@@ -33,11 +34,13 @@ STRINGS = {
         "en": "Stations — use the arrow buttons below the table to reorder:",
     },
     "col_use": {"fa": "استفاده", "en": "Use"},
+    "col_use_cp": {"fa": "استفاده در CP", "en": "Use in CP"},
     "col_order": {"fa": "ترتیب", "en": "Order"},
     "col_opc": {"fa": "کد OPC", "en": "OPC Code"},
     "col_name": {"fa": "نام ایستگاه", "en": "Station Name"},
     "col_rows": {"fa": "حالت‌های خرابی", "en": "Failure modes"},
-    "col_file": {"fa": "فایل", "en": "File"},
+    "col_file": {"fa": "فایل PFMEA", "en": "PFMEA File"},
+    "col_file_cp": {"fa": "فایل CP", "en": "CP File"},
     "select_all": {"fa": "انتخاب همه", "en": "Select All"},
     "deselect_all": {"fa": "لغو همه", "en": "Deselect All"},
     "move_up": {"fa": "بالا", "en": "Up"},
@@ -45,9 +48,11 @@ STRINGS = {
 
     # ---- output
     "output_label": {"fa": "فایل خروجی:", "en": "Output File:"},
+    "cp_output_label": {"fa": "فایل خروجی CP:", "en": "CP Output File:"},
     "include_history": {"fa": "تجمیع شیت History", "en": "Merge History Sheet"},
     "all_profiles": {"fa": "خروجی برای همه پروفایل‌ها", "en": "Create output for all profiles"},
     "merge_button": {"fa": "🚀 تجمیع و ذخیره خروجی", "en": "🚀 Merge & Save Output"},
+    "merge_cp_button": {"fa": "🚀 تجمیع Control Plan", "en": "🚀 Merge Control Plan"},
 
     # ---- profile
     "profile_label": {"fa": "پروفایل:", "en": "Profile:"},
@@ -134,6 +139,13 @@ STRINGS = {
         "en": "File '{name}' is not a valid PFMEA file and was skipped.",
     },
     "missing_file": {"fa": "⚠ فایل ورودی موجود نیست", "en": "⚠ Input file missing"},
+    "cp_file_missing": {"fa": "⚠ فایل CP موجود نیست", "en": "⚠ CP file missing"},
+    "missing_inputs_block": {
+        "fa": "برای ایستگاه‌های زیر فایل {doc} موجود نیست:\n{names}\n\nابتدا فایل‌ها را اضافه کنید یا تیک CP آن‌ها را بردارید.",
+        "en": "The stations below have no {doc} input file:\n{names}\n\nAdd the files first or untick their CP checkbox.",
+    },
+    "doc_type_lbl": {"fa": "نوع سند:", "en": "Document type:"},
+    "toggle_cp": {"fa": "تغییر وضعیت CP", "en": "Toggle CP"},
     "loaded_files": {
         "fa": "{n} فایل بارگذاری شد ({s} ایستگاه).",
         "en": "{n} files loaded ({s} stations).",

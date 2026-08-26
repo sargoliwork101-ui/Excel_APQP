@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 import json
 import re
 
-from .config import PROFILES_DIR, MergeSettings
+from .config import PROFILES_DIR, MergeSettings, default_cp_settings
 
 
 _SAFE = re.compile(r"[^A-Za-z0-9_\-\u0600-\u06FF ]+")
@@ -26,23 +26,32 @@ def _safe_filename(name: str) -> str:
 
 @dataclass
 class StationEntry:
-    """A saved station in a profile: its OPC code, name and check state."""
+    """A saved station in a profile: its OPC code, name and check states."""
     opc: str
     name: str = ""
     enabled: bool = True
+    # Independent "use in Control Plan" flag. Legacy profiles (without this
+    # field) mirror the PFMEA flag so nothing changes for existing users.
+    cp_enabled: bool = True
 
     def to_dict(self) -> dict:
-        return {"opc": self.opc, "name": self.name, "enabled": self.enabled}
+        return {
+            "opc": self.opc,
+            "name": self.name,
+            "enabled": self.enabled,
+            "cp_enabled": self.cp_enabled,
+        }
 
     @classmethod
     def from_dict(cls, d) -> "StationEntry":
         if isinstance(d, str):
             # backwards compat: old profiles stored plain strings
-            return cls(opc=d, name="", enabled=True)
+            return cls(opc=d, name="", enabled=True, cp_enabled=True)
         return cls(
             opc=str(d.get("opc", "")),
             name=str(d.get("name", "")),
             enabled=bool(d.get("enabled", True)),
+            cp_enabled=bool(d.get("cp_enabled", d.get("enabled", True))),
         )
 
 
@@ -52,12 +61,16 @@ class ProductProfile:
     product_name: str = ""
     product_code: str = ""
     template_path: str = ""
+    # Control Plan uses its own template and its own merge settings; station
+    # order and selection stay shared with the PFMEA side of the profile.
+    cp_template_path: str = ""
     stations: List[StationEntry] = field(default_factory=list)
     # Optional per-station row heights, keyed by OPC. Kept separate from
     # global settings so every product profile can preserve its own layout.
     row_heights: Dict[str, int] = field(default_factory=dict)
     hidden_stations: List[str] = field(default_factory=list)
     settings: MergeSettings = field(default_factory=MergeSettings)
+    cp_settings: MergeSettings = field(default_factory=default_cp_settings)
 
     # ---- helpers ---------------------------------------------------
     @property
@@ -81,15 +94,23 @@ class ProductProfile:
             "product_name": self.product_name,
             "product_code": self.product_code,
             "template_path": self.template_path,
+            "cp_template_path": self.cp_template_path,
             "stations": [s.to_dict() for s in self.stations],
             "row_heights": self.row_heights,
             "hidden_stations": self.hidden_stations,
             "settings": self.settings.to_dict(),
+            "cp_settings": self.cp_settings.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProductProfile":
         settings = MergeSettings.from_dict(d.get("settings", {}))
+        # Legacy profiles have no CP settings: fall back to CP defaults.
+        raw_cp = d.get("cp_settings")
+        cp_settings = (MergeSettings.from_dict(raw_cp)
+                       if isinstance(raw_cp, dict) else default_cp_settings())
+        if cp_settings.doc_type != "cp":
+            cp_settings = default_cp_settings()
         # Prefer new "stations" field; fall back to old "station_order".
         raw_stations = d.get("stations")
         if raw_stations is None:
@@ -109,11 +130,13 @@ class ProductProfile:
             product_name=d.get("product_name", ""),
             product_code=d.get("product_code", ""),
             template_path=d.get("template_path", ""),
+            cp_template_path=d.get("cp_template_path", ""),
             stations=stations,
             row_heights={str(k): int(v) for k, v in raw_heights.items()
                          if str(v).isdigit() and int(v) > 0},
             hidden_stations=[str(x) for x in raw_hidden],
             settings=settings,
+            cp_settings=cp_settings,
         )
 
 

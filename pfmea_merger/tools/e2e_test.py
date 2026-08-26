@@ -257,6 +257,111 @@ def main() -> int:
         wb.close()
 
     # -----------------------------------------------------------------
+    section("9. Control Plan (CP): analyze + merge with independent settings")
+    from pfmea_merger.core.config import default_cp_settings
+    cp_settings = default_cp_settings()
+    cp_files = sorted((APP_ROOT.parent / "sample data" / "CP").glob("*.xlsx"))
+    check(len(cp_files) >= 2, f"CP sample files found ({len(cp_files)})")
+    cp_analyses = {}
+    for f in cp_files:
+        a = analyze_workbook(f, cp_settings)
+        cp_analyses[str(f)] = a
+        check(a.is_valid, f"{f.name} is valid as CP")
+        check(a.footer_start_row is not None and a.footer_start_row > cp_settings.header_rows,
+              f"{f.name} CP footer detected at row {a.footer_start_row}")
+
+    cp_sel = []
+    for path, a in cp_analyses.items():
+        for s in a.stations:
+            cp_sel.append((path, s))
+    out_cp = APP_ROOT / "output" / "e2e_cp.xlsx"
+    merge_pfmea(str(TEMPLATES_DIR / "CP_SBM_SOREN_Template.xlsx"), cp_sel,
+                str(out_cp), cp_settings, merge_history=True)
+    wbcp = openpyxl.load_workbook(out_cp)
+    main_name = None
+    for n in wbcp.sheetnames:
+        if n.strip() == "برنامه کنترل":
+            main_name = n
+            break
+    check(main_name is not None, "CP output has 'برنامه کنترل' sheet")
+    wscp = wbcp[main_name]
+    # stations must be merged in order, then footer
+    col_a = [str(wscp.cell(row=r, column=1).value).strip()
+             for r in range(cp_settings.data_start_row, wscp.max_row + 1)
+             if wscp.cell(row=r, column=1).value is not None]
+    merged_codes = [c for c in col_a
+                    if c in {str(s.opc_code) for _p, s in cp_sel}]
+    check(merged_codes == [str(s.opc_code) for _p, s in cp_sel],
+          f"CP stations merged in order: {merged_codes}")
+    check(any("تهیه" in c or "توزیع" in c for c in col_a),
+          "CP footer copied from template")
+    check("تغییرات" in [n.strip() for n in wbcp.sheetnames],
+          "CP 'تغییرات' sheet exists")
+    # CP must never receive PFMEA formulas
+    formulas = [c.coordinate for row in wscp.iter_rows() for c in row
+                if isinstance(c.value, str) and c.value.startswith("=")]
+    check(formulas == [], f"No formulas injected into CP output ({len(formulas)})")
+    check(wscp["AQ2"].value is None, "CP AQ2 untouched")
+    wbcp.close()
+
+    section("10. CP profile flags + mixed PFMEA/CP states")
+    with tempfile.TemporaryDirectory() as tmp:
+        test_name = "__e2e_cp_profile__"
+        pm.delete_profile(test_name)
+        stations = [
+            pm.StationEntry(opc="A125", name="نصب لیبل", enabled=True, cp_enabled=False),
+            pm.StationEntry(opc="A130", name="قطعه گذاری", enabled=False, cp_enabled=True),
+        ]
+        profile = pm.ProductProfile(
+            name=test_name, product_name="CPTEST",
+            template_path=str(TEMPLATE),
+            cp_template_path=str(TEMPLATES_DIR / "CP_SBM_SOREN_Template.xlsx"),
+            stations=stations,
+            settings=settings,
+            cp_settings=default_cp_settings(),
+        )
+        pm.save_profile(profile)
+        loaded = pm.load_profile(test_name)
+        check(loaded.cp_settings.doc_type == "cp", "Profile keeps CP settings type")
+        check(loaded.stations[0].cp_enabled is False and
+              loaded.stations[1].cp_enabled is True,
+              "Per-station CP flags round-trip")
+        check(loaded.cp_template_path.endswith("CP_SBM_SOREN_Template.xlsx"),
+              "CP template path saved in profile")
+
+        # legacy profile (no CP fields) mirrors PFMEA flag
+        legacy = {
+            "name": "__e2e_cp_legacy__",
+            "station_order": ["A125", "A130"],
+            "settings": settings.to_dict(),
+        }
+        import json as _json
+        pm.profile_path("__e2e_cp_legacy__").write_text(
+            _json.dumps(legacy, ensure_ascii=False), encoding="utf-8")
+        legacy_loaded = pm.load_profile("__e2e_cp_legacy__")
+        check(all(s.cp_enabled == s.enabled for s in legacy_loaded.stations),
+              "Legacy stations default cp_enabled = enabled")
+        check(legacy_loaded.cp_settings.doc_type == "cp",
+              "Legacy profile gets CP default settings")
+
+        # 'only CP' merge: A130 enabled for CP only
+        only_cp = [(p_, s) for p_, s in cp_sel if str(s.opc_code) == "A130"]
+        out_cp2 = APP_ROOT / "output" / "e2e_cp_only.xlsx"
+        merge_pfmea(str(TEMPLATES_DIR / "CP_SBM_SOREN_Template.xlsx"), only_cp,
+                    str(out_cp2), cp_settings, merge_history=True)
+        wb2 = openpyxl.load_workbook(out_cp2)
+        ws2 = wb2.worksheets[0]
+        codes2 = {str(ws2.cell(row=r, column=1).value).strip()
+                  for r in range(10, ws2.max_row + 1)
+                  if ws2.cell(row=r, column=1).value}
+        check("A130" in codes2 and "A125" not in codes2,
+              "Only-CP selection produces only A130")
+        wb2.close()
+
+        pm.delete_profile(test_name)
+        pm.delete_profile("__e2e_cp_legacy__")
+
+    # -----------------------------------------------------------------
     print(f"\n{'='*60}")
     print(f"RESULT: {_pass} passed, {_fail} failed")
     return 0 if _fail == 0 else 1
