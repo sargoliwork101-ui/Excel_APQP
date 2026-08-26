@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from copy import copy
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 import re
 import tempfile
 import zipfile
@@ -26,7 +26,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .config import MergeSettings
-from .excel_reader import StationBlock, WorkbookAnalysis, analyze_workbook, last_non_empty_row
+from .excel_reader import StationBlock, analyze_workbook, last_non_empty_row
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +286,6 @@ def _copy_conditional_formatting(src_ws: Worksheet, dst_ws: Worksheet,
         return
     from openpyxl.utils.cell import range_boundaries
 
-    template_footer = None
     for cf in src_ws.conditional_formatting:
         for ref in str(cf.sqref).split():
             try:

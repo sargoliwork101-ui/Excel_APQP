@@ -23,7 +23,7 @@ if __package__ in (None, ""):
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
 
-from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6 import QtWidgets, QtGui
 
 from pfmea_merger.ui.main_window import MainWindow
 from pfmea_merger.ui.style import apply_dark_theme

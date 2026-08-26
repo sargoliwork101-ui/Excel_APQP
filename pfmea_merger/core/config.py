@@ -2,7 +2,7 @@
 Configuration constants and default settings for PFMEA Merger.
 """
 from dataclasses import dataclass, asdict, field
-from typing import List, Optional
+from typing import List
 import json
 from pathlib import Path
 

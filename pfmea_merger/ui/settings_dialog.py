@@ -187,7 +187,6 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _update_doc_title(self):
         """Show which document's settings are being edited."""
-        is_cp = self.doc_combo.currentData() == "cp"
         doc = self.doc_combo.currentText()
         self.setWindowTitle(f"{self.tr_.t('settings_title')} — {doc}")
         if hasattr(self, "title"):

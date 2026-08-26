@@ -3,7 +3,7 @@ Dark theme + modern styling for the PFMEA Merger UI.
 
 Applied via `QApplication.setStyle('Fusion')` and a QSS stylesheet.
 """
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtGui, QtWidgets
 
 
 # Palette: deep navy surfaces with a violet/cyan accent system.

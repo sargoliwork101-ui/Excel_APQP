@@ -78,12 +78,12 @@ def _ui_icon(name: str) -> QtGui.QIcon:
     return QtGui.QIcon(str(p)) if p.exists() else QtGui.QIcon()
 
 
-def _icon_btn(name: str, size: int = 34) -> QtWidgets.QPushButton:
+def _icon_btn(name: str, w: int = 34, h: int = 30) -> QtWidgets.QPushButton:
     """A compact icon-only button (tooltip carries the description)."""
     b = QtWidgets.QPushButton()
     b.setIcon(_ui_icon(name))
-    b.setIconSize(QtCore.QSize(size - 14, size - 14))
-    b.setFixedSize(size, 30)
+    b.setIconSize(QtCore.QSize(min(w, h) - 12, min(w, h) - 12))
+    b.setFixedSize(w, h)
     b.setProperty("iconOnly", True)
     return b
 
@@ -418,10 +418,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.deselect_all_btn.setIcon(_ui_icon("check_off"))
         self.invert_btn = QtWidgets.QPushButton()
         self.invert_btn.setIcon(_ui_icon("swap"))
-        self.up_btn = _icon_btn("arrow_up", size=40)
-        self.down_btn = _icon_btn("arrow_down", size=40)
-        self.top_btn = _icon_btn("arrow_top", size=40)
-        self.bottom_btn = _icon_btn("arrow_bottom", size=40)
+        self.up_btn = _icon_btn("arrow_up", w=40)
+        self.down_btn = _icon_btn("arrow_down", w=40)
+        self.top_btn = _icon_btn("arrow_top", w=40)
+        self.bottom_btn = _icon_btn("arrow_bottom", w=40)
         self.select_all_btn.clicked.connect(lambda: self._set_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._set_all(False))
         self.invert_btn.clicked.connect(self._invert_selection)
@@ -487,12 +487,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Folder button: opens the output folder (last produced output, or
         # the default output folder when nothing has been merged yet).
-        self.open_output_btn = _icon_btn("folder", size=42)
+        self.open_output_btn = _icon_btn("folder", w=42, h=42)
         self.open_output_btn.clicked.connect(self._open_last_output)
 
         self.progress = QtWidgets.QProgressBar()
         self.progress.setValue(0)
         self.progress.setTextVisible(True)
+        # Keep the merge row visually aligned (buttons are 42px tall).
+        self.progress.setFixedHeight(34)
 
         # Both output paths share one compact row.
         out_row = QtWidgets.QHBoxLayout()
@@ -877,8 +879,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 box.setIcon(QtWidgets.QMessageBox.Icon.Question)
                 box.setWindowTitle(self.tr_.t("confirm"))
                 box.setText(self.tr_.t("import_dup", name=src_path.name))
-                btn_yes = box.addButton(self.tr_.t("btn_yes"),
-                                        QtWidgets.QMessageBox.ButtonRole.YesRole)
+                box.addButton(self.tr_.t("btn_yes"),
+                              QtWidgets.QMessageBox.ButtonRole.YesRole)
                 btn_no = box.addButton(self.tr_.t("btn_no"),
                                        QtWidgets.QMessageBox.ButtonRole.NoRole)
                 btn_all = box.addButton(self.tr_.t("btn_yes_all"),
@@ -1205,7 +1207,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.table.setItem(i, self.COL_ROWS, rows_item)
             # Give every failure mode its own readable line. The cap prevents
             # one unusually large file from making the whole table unusable.
-            mode_count = len(r.block.failure_modes)
             manual_height = int(getattr(self.merge_settings, "failure_row_height", 0))
             saved_height = self._row_heights.get(str(r.block.opc_code), 0)
             if saved_height > 0:
@@ -1756,7 +1757,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(
                 self, self.tr_.t("info"), self.tr_.t("backup_restored"),
             )
-        except Exception as exc:
+        except Exception:
             box = QtWidgets.QMessageBox(self)
             box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
             box.setWindowTitle(self.tr_.t("error"))
@@ -1886,6 +1887,7 @@ class MainWindow(QtWidgets.QMainWindow):
             for r in self.rows
             if (r.cp_enabled if is_cp else r.enabled)
             and (r.cp_path if is_cp else r.path)
+            and (r.cp_block is not None if is_cp else True)
             and Path(r.cp_path if is_cp else r.path).exists()
         ]
         if not selections:
@@ -1919,6 +1921,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     for r in self.rows
                     if str(r.block.opc_code) in enabled
                     and (r.cp_path if is_cp else r.path)
+                    and (r.cp_block is not None if is_cp else True)
                     and Path(r.cp_path if is_cp else r.path).exists()
                 ]
                 profile_selections.sort(
