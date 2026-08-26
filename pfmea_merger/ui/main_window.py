@@ -64,6 +64,29 @@ class MergeWorker(QtCore.QThread):
 # =============================================================================
 # Small helpers
 # =============================================================================
+ASSETS_DIR = Path(__file__).parent / "assets"
+
+
+def _ui_icon(name: str) -> QtGui.QIcon:
+    """Load a theme-colored SVG icon from the assets folder.
+
+    Emoji glyphs are missing from many Windows UI fonts (they render as empty
+    boxes), so every button uses SVG icons instead.
+    """
+    p = ASSETS_DIR / f"{name}.svg"
+    return QtGui.QIcon(str(p)) if p.exists() else QtGui.QIcon()
+
+
+def _icon_btn(name: str, size: int = 34) -> QtWidgets.QPushButton:
+    """A compact icon-only button (tooltip carries the description)."""
+    b = QtWidgets.QPushButton()
+    b.setIcon(_ui_icon(name))
+    b.setIconSize(QtCore.QSize(size - 14, size - 14))
+    b.setFixedSize(size, 30)
+    b.setProperty("iconOnly", True)
+    return b
+
+
 def _make_card() -> QtWidgets.QFrame:
     f = QtWidgets.QFrame()
     f.setObjectName("Card")
@@ -179,16 +202,28 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.lang_btn = QtWidgets.QPushButton()
         self.lang_btn.setFixedHeight(36)
+        self.lang_btn.setIcon(_ui_icon("globe"))
         self.lang_btn.setToolTip("Toggle Language / تغییر زبان")
         self.lang_btn.clicked.connect(self._toggle_language)
 
         self.about_btn = QtWidgets.QPushButton()
-        self.about_btn.setFixedHeight(36)
+        self.about_btn.setFixedSize(38, 36)
+        self.about_btn.setIconSize(QtCore.QSize(20, 20))
+        self.about_btn.setIcon(_ui_icon("info"))
+        self.about_btn.setProperty("iconOnly", True)
         self.about_btn.clicked.connect(self._show_about)
 
         self.backup_btn = QtWidgets.QPushButton()
+        self.backup_btn.setFixedSize(38, 36)
+        self.backup_btn.setIconSize(QtCore.QSize(20, 20))
+        self.backup_btn.setIcon(_ui_icon("save"))
+        self.backup_btn.setProperty("iconOnly", True)
         self.backup_btn.clicked.connect(self._backup_system)
         self.restore_backup_btn = QtWidgets.QPushButton()
+        self.restore_backup_btn.setFixedSize(38, 36)
+        self.restore_backup_btn.setIconSize(QtCore.QSize(20, 20))
+        self.restore_backup_btn.setIcon(_ui_icon("undo"))
+        self.restore_backup_btn.setProperty("iconOnly", True)
         self.restore_backup_btn.clicked.connect(self._restore_system)
 
         self.settings_btn = QtWidgets.QPushButton()
@@ -216,10 +251,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.template_label.setObjectName("SectionLabel")
         self.template_edit = QtWidgets.QLineEdit()
         self.template_edit.setReadOnly(True)
-        self.template_browse_btn = QtWidgets.QPushButton("📂")
-        self.template_open_btn = QtWidgets.QPushButton("📖")
-        for b in (self.template_browse_btn, self.template_open_btn):
-            b.setFixedSize(34, 30)
+        self.template_browse_btn = _icon_btn("folder_open")
+        self.template_open_btn = _icon_btn("file_open")
         self.template_browse_btn.clicked.connect(self._pick_template)
         self.template_open_btn.clicked.connect(lambda: self._open_template(self.template_edit))
         self.template_edit.installEventFilter(self)
@@ -228,10 +261,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cp_template_label.setObjectName("SectionLabel")
         self.cp_template_edit = QtWidgets.QLineEdit()
         self.cp_template_edit.setReadOnly(True)
-        self.cp_template_browse_btn = QtWidgets.QPushButton("📂")
-        self.cp_template_open_btn = QtWidgets.QPushButton("📖")
-        for b in (self.cp_template_browse_btn, self.cp_template_open_btn):
-            b.setFixedSize(34, 30)
+        self.cp_template_browse_btn = _icon_btn("folder_open")
+        self.cp_template_open_btn = _icon_btn("file_open")
         self.cp_template_browse_btn.clicked.connect(self._pick_cp_template)
         self.cp_template_open_btn.clicked.connect(lambda: self._open_template(self.cp_template_edit))
         self.cp_template_edit.installEventFilter(self)
@@ -242,8 +273,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.profile_combo.setMinimumWidth(180)
         self.profile_combo.currentIndexChanged.connect(self._on_profile_changed)
         self.profile_load_btn = QtWidgets.QPushButton()
+        self.profile_load_btn.setIcon(_ui_icon("load"))
         self.profile_save_btn = QtWidgets.QPushButton()
+        self.profile_save_btn.setIcon(_ui_icon("save"))
         self.profile_delete_btn = QtWidgets.QPushButton()
+        self.profile_delete_btn.setIcon(_ui_icon("trash"))
         self.profile_delete_btn.setProperty("danger", True)
         self.profile_load_btn.clicked.connect(self._on_load_profile)
         self.profile_save_btn.clicked.connect(self._on_save_profile)
@@ -279,10 +313,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         toolbar = QtWidgets.QHBoxLayout()
         self.add_files_btn = QtWidgets.QPushButton()
+        self.add_files_btn.setIcon(_ui_icon("add_file"))
         self.add_folder_btn = QtWidgets.QPushButton()
+        self.add_folder_btn.setIcon(_ui_icon("add_folder"))
         self.refresh_btn = QtWidgets.QPushButton()
+        self.refresh_btn.setIcon(_ui_icon("refresh"))
         self.remove_btn = QtWidgets.QPushButton()
+        self.remove_btn.setIcon(_ui_icon("remove"))
         self.clear_btn = QtWidgets.QPushButton()
+        self.clear_btn.setIcon(_ui_icon("trash"))
         self.clear_btn.setProperty("danger", True)
         self.add_files_btn.clicked.connect(self._add_files)
         self.add_folder_btn.clicked.connect(self._add_folder)
@@ -302,6 +341,8 @@ class MainWindow(QtWidgets.QMainWindow):
         c2.addWidget(self.hint_label)
 
         self.table = QtWidgets.QTableWidget(0, 8)
+        # SVG check icons in the USE columns need a slightly larger size.
+        self.table.setIconSize(QtCore.QSize(22, 22))
         self.table.verticalHeader().setVisible(True)
         self.table.verticalHeader().setFixedWidth(38)
         # Allow direct row-height editing by dragging the boundary between
@@ -326,7 +367,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionsClickable(False)
-        self.table.setColumnWidth(self.COL_USE,     100)
+        self.table.setColumnWidth(self.COL_USE,     112)
         self.table.setColumnWidth(self.COL_USE_CP,  80)
         self.table.setColumnWidth(self.COL_ORDER,   60)
         self.table.setColumnWidth(self.COL_OPC,     90)
@@ -358,14 +399,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         row3 = QtWidgets.QHBoxLayout()
         self.select_all_btn = QtWidgets.QPushButton()
+        self.select_all_btn.setIcon(_ui_icon("check_on"))
         self.deselect_all_btn = QtWidgets.QPushButton()
+        self.deselect_all_btn.setIcon(_ui_icon("check_off"))
         self.invert_btn = QtWidgets.QPushButton()
-        self.up_btn = QtWidgets.QPushButton("⬆")
-        self.down_btn = QtWidgets.QPushButton("⬇")
-        self.top_btn = QtWidgets.QPushButton("⏫")
-        self.bottom_btn = QtWidgets.QPushButton("⏬")
-        for b in (self.up_btn, self.down_btn, self.top_btn, self.bottom_btn):
-            b.setFixedWidth(44)
+        self.invert_btn.setIcon(_ui_icon("swap"))
+        self.up_btn = _icon_btn("arrow_up", size=40)
+        self.down_btn = _icon_btn("arrow_down", size=40)
+        self.top_btn = _icon_btn("arrow_top", size=40)
+        self.bottom_btn = _icon_btn("arrow_bottom", size=40)
         self.select_all_btn.clicked.connect(lambda: self._set_all(True))
         self.deselect_all_btn.clicked.connect(lambda: self._set_all(False))
         self.invert_btn.clicked.connect(self._invert_selection)
@@ -397,15 +439,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_label = QtWidgets.QLabel()
         self.output_label.setObjectName("SectionLabel")
         self.output_edit = QtWidgets.QLineEdit()
-        self.output_browse_btn = QtWidgets.QPushButton("📂")
-        self.output_browse_btn.setFixedSize(34, 30)
+        self.output_browse_btn = _icon_btn("folder_open")
         self.output_browse_btn.clicked.connect(self._pick_output)
 
         self.cp_output_label = QtWidgets.QLabel()
         self.cp_output_label.setObjectName("SectionLabel")
         self.cp_output_edit = QtWidgets.QLineEdit()
-        self.cp_output_browse_btn = QtWidgets.QPushButton("📂")
-        self.cp_output_browse_btn.setFixedSize(34, 30)
+        self.cp_output_browse_btn = _icon_btn("folder_open")
         self.cp_output_browse_btn.clicked.connect(self._pick_cp_output)
 
         self.history_chk = QtWidgets.QCheckBox()
@@ -418,20 +458,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.merge_btn = QtWidgets.QPushButton()
         self.merge_btn.setMinimumHeight(42)
         self.merge_btn.setProperty("primary", True)
+        self.merge_btn.setIcon(_ui_icon("rocket"))
+        self.merge_btn.setIconSize(QtCore.QSize(22, 22))
         f = self.merge_btn.font(); f.setPointSize(11); f.setBold(True); self.merge_btn.setFont(f)
         self.merge_btn.clicked.connect(self._do_merge)
 
         self.cp_merge_btn = QtWidgets.QPushButton()
         self.cp_merge_btn.setMinimumHeight(42)
         self.cp_merge_btn.setProperty("primary", True)
+        self.cp_merge_btn.setIcon(_ui_icon("merge"))
+        self.cp_merge_btn.setIconSize(QtCore.QSize(22, 22))
         f = self.cp_merge_btn.font(); f.setPointSize(11); f.setBold(True); self.cp_merge_btn.setFont(f)
         self.cp_merge_btn.clicked.connect(self._do_cp_merge)
 
         # Folder button: opens the output folder (last produced output, or
         # the default output folder when nothing has been merged yet).
-        self.open_output_btn = QtWidgets.QPushButton("📁")
-        self.open_output_btn.setFixedSize(42, 42)
-        f = self.open_output_btn.font(); f.setPointSize(14); self.open_output_btn.setFont(f)
+        self.open_output_btn = _icon_btn("folder", size=42)
         self.open_output_btn.clicked.connect(self._open_last_output)
 
         self.progress = QtWidgets.QProgressBar()
@@ -483,45 +525,39 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.tr_.is_rtl()
             else "PFMEA template + station files → one merged output"
         )
-        self.lang_btn.setText("🌐 " + ("EN" if self.tr_.is_rtl() else "فا"))
-        self.backup_btn.setText("💾 " + t("backup"))
-        self.restore_backup_btn.setText("↶ " + t("restore_backup"))
-        self.about_btn.setText("ℹ " + t("about"))
+        self.lang_btn.setText("EN" if self.tr_.is_rtl() else "فا")
+        self.backup_btn.setToolTip(t("backup"))
+        self.restore_backup_btn.setToolTip(t("restore_backup"))
+        self.about_btn.setToolTip(t("about"))
+        self.settings_btn.setToolTip(t("settings_title"))
         self.template_label.setText(t("template_label"))
-        self.template_open_btn.setText("📖")
         self.template_open_btn.setToolTip(t("tpl_open_pfmea_tip"))
-        self.template_browse_btn.setText("📂")
         self.template_browse_btn.setToolTip(t("tpl_browse_pfmea_tip"))
         self.cp_template_label.setText(t("cp_template_label"))
-        self.cp_template_open_btn.setText("📖")
         self.cp_template_open_btn.setToolTip(t("tpl_open_cp_tip"))
-        self.cp_template_browse_btn.setText("📂")
         self.cp_template_browse_btn.setToolTip(t("tpl_browse_cp_tip"))
         self.profile_label.setText(t("profile_label"))
-        self.profile_load_btn.setText("↩ " + t("load_profile"))
-        self.profile_save_btn.setText("💾 " + t("save_profile"))
-        self.profile_delete_btn.setText("🗑 " + t("delete_profile"))
-        self.add_files_btn.setText("📄 " + t("add_files"))
-        self.add_folder_btn.setText("📁 " + t("add_folder"))
-        self.refresh_btn.setText("🔄 " + t("refresh"))
-        self.remove_btn.setText("➖ " + t("remove_selected"))
-        self.clear_btn.setText("🗑 " + t("clear"))
+        self.profile_load_btn.setText(t("load_profile"))
+        self.profile_save_btn.setText(t("save_profile"))
+        self.profile_delete_btn.setText(t("delete_profile"))
+        self.add_files_btn.setText(t("add_files"))
+        self.add_folder_btn.setText(t("add_folder"))
+        self.refresh_btn.setText(t("refresh"))
+        self.remove_btn.setText(t("remove_selected"))
+        self.clear_btn.setText(t("clear"))
         self.hint_label.setText(t("stations_hint"))
-        self.select_all_btn.setText("☑ " + t("select_all"))
-        self.deselect_all_btn.setText("☐ " + t("deselect_all"))
-        self.invert_btn.setText("↔ " + t("invert"))
+        self.select_all_btn.setText(t("select_all"))
+        self.deselect_all_btn.setText(t("deselect_all"))
+        self.invert_btn.setText(t("invert"))
         self.output_label.setText(t("output_label"))
-        self.output_browse_btn.setText("📂")
         self.output_browse_btn.setToolTip(t("out_browse_pfmea_tip"))
         self.cp_output_label.setText(t("cp_output_label"))
-        self.cp_output_browse_btn.setText("📂")
         self.cp_output_browse_btn.setToolTip(t("out_browse_cp_tip"))
         self.history_chk.setText(t("include_history"))
         self.open_after_chk.setText(t("open_after"))
         self.all_profiles_chk.setText(t("all_profiles"))
         self.merge_btn.setText(t("merge_button"))
         self.cp_merge_btn.setText(t("merge_cp_button"))
-        self.open_output_btn.setText("📁")
         self.open_output_btn.setToolTip(t("open_output_folder"))
         self.table.setHorizontalHeaderLabels([
             t("col_use"), t("col_use_cp"), t("col_order"), t("col_opc"),
@@ -912,18 +948,15 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
     def _make_use_item(self, checked: bool) -> QtWidgets.QTableWidgetItem:
-        """A text checkbox item whose whole cell responds to a click."""
+        """An icon checkbox item whose whole cell responds to a click."""
         chk = QtWidgets.QTableWidgetItem()
         chk.setFlags(
             QtCore.Qt.ItemFlag.ItemIsEnabled
             | QtCore.Qt.ItemFlag.ItemIsSelectable
         )
-        chk.setText("☑" if checked else "☐")
+        chk.setIcon(_ui_icon("check_on" if checked else "check_off"))
         chk.setData(QtCore.Qt.ItemDataRole.UserRole, checked)
         chk.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        chk_font = chk.font(); chk_font.setPointSize(14); chk_font.setBold(True)
-        chk.setFont(chk_font)
-        chk.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
         return chk
 
     def _rebuild_table(self):
@@ -1073,9 +1106,8 @@ class MainWindow(QtWidgets.QMainWindow):
         it = self.table.item(row, col)
         if it is not None:
             self._suspend_checks = True
-            it.setText("☑" if checked else "☐")
+            it.setIcon(_ui_icon("check_on" if checked else "check_off"))
             it.setData(QtCore.Qt.ItemDataRole.UserRole, checked)
-            it.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
             self._suspend_checks = False
 
     def _on_cell_double_clicked(self, row: int, col: int):
@@ -1120,9 +1152,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 item.setBackground(QtGui.QColor("#4a2928"))
                 item.setForeground(QtGui.QColor("#ff9a65"))
             elif col == self.COL_USE or col == self.COL_USE_CP:
-                checked = bool(item.data(QtCore.Qt.ItemDataRole.UserRole))
                 item.setBackground(QtGui.QBrush())
-                item.setForeground(QtGui.QColor("#7d72ff" if checked else "#687992"))
+                item.setForeground(QtGui.QColor("#eef4ff"))
             else:
                 item.setBackground(QtGui.QBrush())
                 item.setForeground(QtGui.QColor("#eef4ff"))
@@ -1172,15 +1203,12 @@ class MainWindow(QtWidgets.QMainWindow):
         for i, r in enumerate(self.rows):
             it = self.table.item(i, self.COL_USE)
             if it:
-                it.setText("☑" if r.enabled else "☐")
+                it.setIcon(_ui_icon("check_on" if r.enabled else "check_off"))
                 it.setData(QtCore.Qt.ItemDataRole.UserRole, r.enabled)
-                it.setForeground(QtGui.QColor("#7d72ff" if r.enabled else "#687992"))
             cp_it = self.table.item(i, self.COL_USE_CP)
             if cp_it:
-                cp_it.setText("☑" if r.cp_enabled else "☐")
+                cp_it.setIcon(_ui_icon("check_on" if r.cp_enabled else "check_off"))
                 cp_it.setData(QtCore.Qt.ItemDataRole.UserRole, r.cp_enabled)
-                cp_it.setForeground(
-                    QtGui.QColor("#7d72ff" if r.cp_enabled else "#687992"))
         self._suspend_checks = False
         self._update_counts()
 
@@ -1800,13 +1828,17 @@ class MainWindow(QtWidgets.QMainWindow):
             box.setWindowTitle(self.tr_.t("info"))
             box.setText(self.tr_.t("merge_success", path=out_path))
             open_btn = box.addButton(
-                "📂 " + ("باز کردن پوشه" if self.tr_.is_rtl() else "Open folder"),
+                "باز کردن پوشه" if self.tr_.is_rtl() else "Open folder",
                 QtWidgets.QMessageBox.ButtonRole.ActionRole,
             )
+            if open_btn is not None:
+                open_btn.setIcon(_ui_icon("folder"))
             file_btn = box.addButton(
-                "📄 " + ("باز کردن فایل" if self.tr_.is_rtl() else "Open file"),
+                "باز کردن فایل" if self.tr_.is_rtl() else "Open file",
                 QtWidgets.QMessageBox.ButtonRole.ActionRole,
             )
+            if file_btn is not None:
+                file_btn.setIcon(_ui_icon("file_open"))
             box.addButton(QtWidgets.QMessageBox.StandardButton.Ok)
             box.exec()
             if box.clickedButton() is open_btn:
@@ -1861,20 +1893,20 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         t = self.tr_.t
         menu = QtWidgets.QMenu(self)
-        act_toggle = menu.addAction("☑ " + t("toggle"))
-        act_check = menu.addAction("☑ " + t("check_pfmea"))
-        act_uncheck = menu.addAction("☐ " + t("uncheck_pfmea"))
+        act_toggle = menu.addAction(_ui_icon("swap"), t("toggle"))
+        act_check = menu.addAction(_ui_icon("check_on"), t("check_pfmea"))
+        act_uncheck = menu.addAction(_ui_icon("check_off"), t("uncheck_pfmea"))
         menu.addSeparator()
-        act_toggle_cp = menu.addAction("☑ " + t("toggle_cp"))
-        act_check_cp = menu.addAction("☑ " + t("check_cp"))
-        act_uncheck_cp = menu.addAction("☐ " + t("uncheck_cp"))
+        act_toggle_cp = menu.addAction(_ui_icon("swap"), t("toggle_cp"))
+        act_check_cp = menu.addAction(_ui_icon("check_on"), t("check_cp"))
+        act_uncheck_cp = menu.addAction(_ui_icon("check_off"), t("uncheck_cp"))
         menu.addSeparator()
-        act_top = menu.addAction("⏫ " + t("move_top"))
-        act_up = menu.addAction("⬆ " + t("move_up"))
-        act_down = menu.addAction("⬇ " + t("move_down"))
-        act_bot = menu.addAction("⏬ " + t("move_bottom"))
+        act_top = menu.addAction(_ui_icon("arrow_top"), t("move_top"))
+        act_up = menu.addAction(_ui_icon("arrow_up"), t("move_up"))
+        act_down = menu.addAction(_ui_icon("arrow_down"), t("move_down"))
+        act_bot = menu.addAction(_ui_icon("arrow_bottom"), t("move_bottom"))
         menu.addSeparator()
-        act_del = menu.addAction("🗑 " + t("remove_selected"))
+        act_del = menu.addAction(_ui_icon("trash"), t("remove_selected"))
         chosen = menu.exec(self.table.viewport().mapToGlobal(pos))
         if chosen is act_toggle: self._toggle_selected()
         elif chosen is act_toggle_cp: self._toggle_selected_cp()

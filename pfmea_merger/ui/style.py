@@ -181,6 +181,11 @@ QPushButton:pressed {{
     background: #1a2940;
     padding-top: 9px;
 }}
+/* Icon-only square buttons: tight padding so the icon stays centered. */
+QPushButton[iconOnly="true"] {{
+    padding: 3px 4px;
+    min-height: 0;
+}}
 QPushButton:disabled {{
     color: #71829b;
     background: #1a273b;

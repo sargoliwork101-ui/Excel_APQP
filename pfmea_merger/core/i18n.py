@@ -9,8 +9,8 @@ STRINGS = {
     "profile_title": {"fa": "پروفایل محصول", "en": "Product Profile"},
 
     # ---- top toolbar
-    "template_label": {"fa": "فایل قالب PFMEA:", "en": "PFMEA Template File:"},
-    "cp_template_label": {"fa": "فایل قالب CP:", "en": "CP Template File:"},
+    "template_label": {"fa": "قالب PFMEA:", "en": "PFMEA Template:"},
+    "cp_template_label": {"fa": "قالب CP:", "en": "CP Template:"},
     "tpl_open_pfmea_tip": {"fa": "باز کردن فایل قالب PFMEA", "en": "Open the PFMEA template file"},
     "tpl_browse_pfmea_tip": {"fa": "انتخاب فایل قالب PFMEA", "en": "Browse for the PFMEA template file"},
     "tpl_open_cp_tip": {"fa": "باز کردن فایل قالب CP", "en": "Open the CP template file"},
@@ -51,14 +51,14 @@ STRINGS = {
     "move_down": {"fa": "پایین", "en": "Down"},
 
     # ---- output
-    "output_label": {"fa": "فایل خروجی PFMEA:", "en": "PFMEA Output File:"},
-    "cp_output_label": {"fa": "فایل خروجی CP:", "en": "CP Output File:"},
+    "output_label": {"fa": "خروجی PFMEA:", "en": "PFMEA Output:"},
+    "cp_output_label": {"fa": "خروجی CP:", "en": "CP Output:"},
     "out_browse_pfmea_tip": {"fa": "انتخاب مسیر فایل خروجی PFMEA", "en": "Browse for the PFMEA output file"},
     "out_browse_cp_tip": {"fa": "انتخاب مسیر فایل خروجی CP", "en": "Browse for the CP output file"},
-    "include_history": {"fa": "تجمیع شیت History/تغییرات", "en": "Merge History/تغییرات sheet"},
+    "include_history": {"fa": "کپی شیت History/تغییرات از قالب", "en": "Copy History/تغییرات sheet from template"},
     "all_profiles": {"fa": "خروجی برای همه پروفایل‌ها", "en": "Create output for all profiles"},
-    "merge_button": {"fa": "🚀 تجمیع PFMEA", "en": "🚀 Merge PFMEA"},
-    "merge_cp_button": {"fa": "🚀 تجمیع Control Plan", "en": "🚀 Merge Control Plan"},
+    "merge_button": {"fa": "تجمیع PFMEA", "en": "Merge PFMEA"},
+    "merge_cp_button": {"fa": "تجمیع Control Plan", "en": "Merge Control Plan"},
 
     # ---- profile
     "profile_label": {"fa": "پروفایل:", "en": "Profile:"},
@@ -144,8 +144,8 @@ STRINGS = {
         "fa": "فایل «{name}» فرمت معتبر PFMEA یا CP ندارد و نادیده گرفته شد.",
         "en": "File '{name}' is not a valid PFMEA or CP file and was skipped.",
     },
-    "missing_file": {"fa": "⚠ فایل PFMEA موجود نیست", "en": "⚠ PFMEA file missing"},
-    "cp_file_missing": {"fa": "⚠ فایل CP موجود نیست", "en": "⚠ CP file missing"},
+    "missing_file": {"fa": "فایل PFMEA موجود نیست", "en": "PFMEA file missing"},
+    "cp_file_missing": {"fa": "فایل CP موجود نیست", "en": "CP file missing"},
     "missing_inputs_block": {
         "fa": "برای ایستگاه‌های زیر فایل {doc} موجود نیست:\n{names}\n\nابتدا فایل‌ها را اضافه کنید یا تیک CP آن‌ها را بردارید.",
         "en": "The stations below have no {doc} input file:\n{names}\n\nAdd the files first or untick their CP checkbox.",
