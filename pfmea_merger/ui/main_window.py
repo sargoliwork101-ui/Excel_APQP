@@ -200,37 +200,41 @@ class MainWindow(QtWidgets.QMainWindow):
         title_col.addWidget(self.subtitle_label)
         title_bar.addLayout(title_col, 1)
 
+        # Title-bar actions all share the same icon-only square size so the
+        # row reads as one consistent group.
         self.lang_btn = QtWidgets.QPushButton()
-        self.lang_btn.setFixedHeight(36)
+        self.lang_btn.setFixedSize(38, 38)
+        self.lang_btn.setIconSize(QtCore.QSize(20, 20))
         self.lang_btn.setIcon(_ui_icon("globe"))
+        self.lang_btn.setProperty("iconOnly", True)
         self.lang_btn.setToolTip("Toggle Language / تغییر زبان")
         self.lang_btn.clicked.connect(self._toggle_language)
 
         self.about_btn = QtWidgets.QPushButton()
-        self.about_btn.setFixedSize(38, 36)
+        self.about_btn.setFixedSize(38, 38)
         self.about_btn.setIconSize(QtCore.QSize(20, 20))
         self.about_btn.setIcon(_ui_icon("info"))
         self.about_btn.setProperty("iconOnly", True)
         self.about_btn.clicked.connect(self._show_about)
 
         self.backup_btn = QtWidgets.QPushButton()
-        self.backup_btn.setFixedSize(38, 36)
+        self.backup_btn.setFixedSize(38, 38)
         self.backup_btn.setIconSize(QtCore.QSize(20, 20))
-        self.backup_btn.setIcon(_ui_icon("save"))
+        self.backup_btn.setIcon(_ui_icon("backup"))
         self.backup_btn.setProperty("iconOnly", True)
         self.backup_btn.clicked.connect(self._backup_system)
         self.restore_backup_btn = QtWidgets.QPushButton()
-        self.restore_backup_btn.setFixedSize(38, 36)
+        self.restore_backup_btn.setFixedSize(38, 38)
         self.restore_backup_btn.setIconSize(QtCore.QSize(20, 20))
         self.restore_backup_btn.setIcon(_ui_icon("undo"))
         self.restore_backup_btn.setProperty("iconOnly", True)
         self.restore_backup_btn.clicked.connect(self._restore_system)
 
         self.settings_btn = QtWidgets.QPushButton()
-        self.settings_btn.setIcon(QtGui.QIcon(str(Path(__file__).parent / "assets" / "settings.svg")))
+        self.settings_btn.setIcon(QtGui.QIcon(str(ASSETS_DIR / "settings.svg")))
         self.settings_btn.setIconSize(QtCore.QSize(20, 20))
         self.settings_btn.setFixedSize(38, 38)
-        f = self.settings_btn.font(); f.setPointSize(14); self.settings_btn.setFont(f)
+        self.settings_btn.setProperty("iconOnly", True)
         self.settings_btn.setToolTip("Settings")
         self.settings_btn.clicked.connect(self._open_settings)
 
@@ -367,8 +371,8 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QTableWidget.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionsClickable(False)
-        self.table.setColumnWidth(self.COL_USE,     112)
-        self.table.setColumnWidth(self.COL_USE_CP,  80)
+        self.table.setColumnWidth(self.COL_USE,     72)
+        self.table.setColumnWidth(self.COL_USE_CP,  64)
         self.table.setColumnWidth(self.COL_ORDER,   60)
         self.table.setColumnWidth(self.COL_OPC,     90)
         self.table.setColumnWidth(self.COL_NAME,    240)
@@ -378,10 +382,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.table.verticalHeader().setDefaultSectionSize(38)
         self.table.setWordWrap(True)
         self.table.itemChanged.connect(self._on_table_item_changed)
-        # The whole USE cell is clickable (not only the native checkbox).
-        self.table.cellClicked.connect(self._on_use_cell_clicked)
-        # Double-clicking the file column opens that input workbook.
-        self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        # The whole USE cell is clickable (not only the native checkbox),
+        # and a single click on a file name opens that input workbook.
+        self.table.cellClicked.connect(self._on_cell_clicked)
+        # Header tooltips explain what the PFMEA / CP tick columns do.
+        self.table.horizontalHeader().installEventFilter(self)
         # Right-click context menu
         self.table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
@@ -525,7 +530,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.tr_.is_rtl()
             else "PFMEA template + station files → one merged output"
         )
-        self.lang_btn.setText("EN" if self.tr_.is_rtl() else "فا")
+        self.lang_btn.setToolTip(
+            "English" if self.tr_.is_rtl() else "فارسی")
         self.backup_btn.setToolTip(t("backup"))
         self.restore_backup_btn.setToolTip(t("restore_backup"))
         self.about_btn.setToolTip(t("about"))
@@ -637,6 +643,19 @@ class MainWindow(QtWidgets.QMainWindow):
             if watched is edit:
                 if event.type() == QtCore.QEvent.Type.MouseButtonDblClick:
                     self._open_template(edit)
+                    return True
+        header = getattr(self, "table", None)
+        if header is not None:
+            header = header.horizontalHeader()
+            if watched is header and event.type() == QtCore.QEvent.Type.ToolTip:
+                section = header.logicalIndexAt(event.pos())
+                tip = ""
+                if section == self.COL_USE:
+                    tip = self.tr_.t("col_use_tip")
+                elif section == self.COL_USE_CP:
+                    tip = self.tr_.t("col_use_cp_tip")
+                if tip:
+                    QtWidgets.QToolTip.showText(event.globalPos(), tip, header)
                     return True
         return super().eventFilter(watched, event)
 
@@ -876,14 +895,9 @@ class MainWindow(QtWidgets.QMainWindow):
                           reverse=True)
         if not rows_idx:
             return
-        removed_codes = set()
-        for index in rows_idx:
-            if 0 <= index < len(self.rows):
-                removed_codes.add(str(self.rows[index].block.opc_code))
-                del self.rows[index]
         if self._active_profile_name:
-            # Removing a station under an active profile changes that profile.
-            # Never persist profile changes silently — ask the user first.
+            # Ask BEFORE anything is touched: "No" must leave the rows in the
+            # table AND the profile file completely unchanged.
             answer = QtWidgets.QMessageBox.question(
                 self, self.tr_.t("confirm"),
                 self.tr_.t("save_profile_changes", name=self._active_profile_name),
@@ -891,15 +905,22 @@ class MainWindow(QtWidgets.QMainWindow):
                 | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.Yes,
             )
-            if answer == QtWidgets.QMessageBox.StandardButton.Yes:
-                # Removal is a visibility choice for this profile only. Keep
-                # the workbook loaded so another profile can still use the station.
-                self._hidden_stations.update(removed_codes)
-                self._save_profile_data(self._active_profile_name)
-            # "No" keeps the removal for this session only; the profile file
-            # stays untouched and switching profiles still offers to save.
+            if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
+            removed_codes = set()
+            for index in rows_idx:
+                if 0 <= index < len(self.rows):
+                    removed_codes.add(str(self.rows[index].block.opc_code))
+                    del self.rows[index]
+            # Removal is a visibility choice for this profile only. Keep the
+            # workbook loaded so another profile can still use the station.
+            self._hidden_stations.update(removed_codes)
+            self._save_profile_data(self._active_profile_name)
         else:
             # Without a profile, retain the old session-only removal behavior.
+            for index in rows_idx:
+                if 0 <= index < len(self.rows):
+                    del self.rows[index]
             remaining_paths = {r.path for r in self.rows}
             for path in list(self.workbooks.keys()):
                 if path not in remaining_paths:
@@ -1046,6 +1067,9 @@ class MainWindow(QtWidgets.QMainWindow):
             file_item.setForeground(QtGui.QColor("#ff9a65" if not r.path else "#b9c7ff"))
             if not r.path:
                 file_item.setBackground(QtGui.QColor("#4a2928"))
+            else:
+                # Hand cursor: a single click on the file name opens it.
+                file_item.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             self.table.setItem(i, self.COL_FILE, file_item)
 
             cp_file_text = (Path(r.cp_path).name if r.cp_path
@@ -1056,6 +1080,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtGui.QColor("#ff9a65" if not r.cp_path else "#b9c7ff"))
             if not r.cp_path:
                 cp_file_item.setBackground(QtGui.QColor("#4a2928"))
+            else:
+                cp_file_item.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             self.table.setItem(i, self.COL_FILE_CP, cp_file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
@@ -1076,6 +1102,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self._layout_sync and section == self.COL_ROWS:
             self.merge_settings.failure_column_width = max(180, int(new_size))
 
+    def _on_cell_double_clicked(self, row: int, col: int):
+        """Kept for older call sites: file cells now open on a single click."""
+        self._on_cell_clicked(row, col)
+
     def _on_table_item_changed(self, item: QtWidgets.QTableWidgetItem):
         # Kept for compatibility with older table items/profiles. Current USE
         # cells are deliberately non-native checkboxes; cellClicked is used so
@@ -1089,8 +1119,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.rows[row].enabled = value
         self._update_counts()
 
-    def _on_use_cell_clicked(self, row: int, col: int):
-        """Toggle a station by clicking anywhere in its USE cells."""
+    def _on_cell_clicked(self, row: int, col: int):
+        """Toggle a station from its USE cells; open a workbook by clicking
+        anywhere on its file name."""
         if not (0 <= row < len(self.rows)):
             return
         if col == self.COL_USE:
@@ -1101,6 +1132,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.rows[row].cp_enabled = not self.rows[row].cp_enabled
             self._sync_use_cell(row, self.COL_USE_CP, self.rows[row].cp_enabled)
             self._update_counts()
+        elif col in (self.COL_FILE, self.COL_FILE_CP):
+            path = (self.rows[row].cp_path if col == self.COL_FILE_CP
+                    else self.rows[row].path)
+            if path and Path(path).exists():
+                self._open_file(path)
 
     def _sync_use_cell(self, row: int, col: int, checked: bool):
         it = self.table.item(row, col)
@@ -1109,19 +1145,6 @@ class MainWindow(QtWidgets.QMainWindow):
             it.setIcon(_ui_icon("check_on" if checked else "check_off"))
             it.setData(QtCore.Qt.ItemDataRole.UserRole, checked)
             self._suspend_checks = False
-
-    def _on_cell_double_clicked(self, row: int, col: int):
-        """Open an input workbook when its file cell is double-clicked."""
-        if not (0 <= row < len(self.rows)):
-            return
-        if col == self.COL_FILE:
-            path = self.rows[row].path
-            if path and Path(path).exists():
-                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
-        elif col == self.COL_FILE_CP:
-            path = self.rows[row].cp_path
-            if path and Path(path).exists():
-                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
 
     def _update_counts(self):
         total = len(self.rows)

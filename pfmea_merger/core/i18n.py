@@ -37,8 +37,16 @@ STRINGS = {
         "fa": "ایستگاه‌ها — برای جابه‌جایی از دکمه‌های فلش پایین جدول استفاده کنید:",
         "en": "Stations — use the arrow buttons below the table to reorder:",
     },
-    "col_use": {"fa": "استفاده در PFMEA", "en": "Use in PFMEA"},
-    "col_use_cp": {"fa": "استفاده در CP", "en": "Use in CP"},
+    "col_use": {"fa": "PFMEA", "en": "PFMEA"},
+    "col_use_cp": {"fa": "CP", "en": "CP"},
+    "col_use_tip": {
+        "fa": "تیک PFMEA:\nاگر فعال باشد، این ایستگاه در فایل خروجی PFMEA قرار می‌گیرد.",
+        "en": "PFMEA tick:\nwhen enabled, this station is included in the PFMEA output.",
+    },
+    "col_use_cp_tip": {
+        "fa": "تیک CP:\nاگر فعال باشد، این ایستگاه در فایل خروجی Control Plan قرار می‌گیرد.",
+        "en": "CP tick:\nwhen enabled, this station is included in the Control Plan output.",
+    },
     "col_order": {"fa": "ترتیب", "en": "Order"},
     "col_opc": {"fa": "کد OPC", "en": "OPC Code"},
     "col_name": {"fa": "نام ایستگاه", "en": "Station Name"},
@@ -199,8 +207,8 @@ STRINGS = {
         "en": "Save changes to profile '{name}' before switching?",
     },
     "save_profile_changes": {
-        "fa": "تغییرات (حذف ایستگاه‌های انتخاب‌شده) در پروفایل «{name}» ذخیره شود؟",
-        "en": "Save these station changes (removal) to profile '{name}'?",
+        "fa": "ردیف‌های انتخاب‌شده حذف و در پروفایل «{name}» ذخیره شوند؟\n(با انتخاب «نه» هیچ ردیفی حذف و هیچ چیزی ذخیره نمی‌شود)",
+        "en": "Remove the selected stations and save to profile '{name}'?\n(Choosing 'No' removes nothing and saves nothing)",
     },
     "overwrite_output": {
         "fa": "فایل خروجی از قبل وجود دارد:\n{path}\n\nجایگزین شود؟",
