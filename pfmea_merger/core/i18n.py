@@ -227,8 +227,8 @@ STRINGS = {
         "en": "Save changes to profile '{name}' before switching?",
     },
     "save_profile_changes": {
-        "fa": "ردیف‌های انتخاب‌شده حذف و در پروفایل «{name}» ذخیره شوند؟\n(با انتخاب «نه» هیچ ردیفی حذف و هیچ چیزی ذخیره نمی‌شود)",
-        "en": "Remove the selected stations and save to profile '{name}'?\n(Choosing 'No' removes nothing and saves nothing)",
+        "fa": "ردیف‌های انتخاب‌شده حذف شوند و این تغییر در پروفایل «{name}» ذخیره شود؟\n(با انتخاب «نه»: حذف فقط در همین نشست اعمال می‌شود و فایل پروفایل دست‌نخورده می‌ماند)",
+        "en": "Remove the selected stations and save the change to profile '{name}'?\n(Choosing 'No' applies the removal to this session only; the profile file stays unchanged)",
     },
     "overwrite_output": {
         "fa": "فایل خروجی از قبل وجود دارد:\n{path}\n\nجایگزین شود؟",

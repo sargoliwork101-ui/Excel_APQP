@@ -390,6 +390,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # The whole USE cell is clickable (not only the native checkbox),
         # and a single click on a file name opens that input workbook.
         self.table.cellClicked.connect(self._on_cell_clicked)
+        # Pointing-hand cursor over file-name cells (QTableWidgetItem has no
+        # setCursor; the viewport cursor is switched while hovering).
+        self.table.setMouseTracking(True)
+        self.table.viewport().installEventFilter(self)
         # Header tooltips explain what the PFMEA / CP tick columns do.
         self.table.horizontalHeader().installEventFilter(self)
         # Right-click context menu
@@ -651,9 +655,18 @@ class MainWindow(QtWidgets.QMainWindow):
                 if event.type() == QtCore.QEvent.Type.MouseButtonDblClick:
                     self._open_template(edit)
                     return True
-        header = getattr(self, "table", None)
-        if header is not None:
-            header = header.horizontalHeader()
+        table = getattr(self, "table", None)
+        if table is not None:
+            if watched is table.viewport():
+                if event.type() in (QtCore.QEvent.Type.MouseMove,
+                                    QtCore.QEvent.Type.HoverMove):
+                    self._update_file_cursor(event.pos())
+                    return False
+                if event.type() == QtCore.QEvent.Type.Leave:
+                    table.viewport().setCursor(
+                        QtCore.Qt.CursorShape.ArrowCursor)
+                    return False
+            header = table.horizontalHeader()
             if watched is header and event.type() == QtCore.QEvent.Type.ToolTip:
                 section = header.logicalIndexAt(event.pos())
                 tip = ""
@@ -665,6 +678,21 @@ class MainWindow(QtWidgets.QMainWindow):
                     QtWidgets.QToolTip.showText(event.globalPos(), tip, header)
                     return True
         return super().eventFilter(watched, event)
+
+    def _update_file_cursor(self, pos) -> None:
+        """Pointing hand over existing file names, arrow everywhere else."""
+        item = self.table.itemAt(pos)
+        hand = False
+        if item is not None and item.column() in (self.COL_FILE, self.COL_FILE_CP):
+            row = item.row()
+            if 0 <= row < len(self.rows):
+                r = self.rows[row]
+                path = (r.cp_path if item.column() == self.COL_FILE_CP
+                        else r.path)
+                hand = bool(path) and Path(path).exists()
+        self.table.viewport().setCursor(
+            QtCore.Qt.CursorShape.PointingHandCursor if hand
+            else QtCore.Qt.CursorShape.ArrowCursor)
 
     def _pick_template(self):
         start = self.template_edit.text() or str(TEMPLATES_DIR)
@@ -1011,9 +1039,12 @@ class MainWindow(QtWidgets.QMainWindow):
                           reverse=True)
         if not rows_idx:
             return
+        save_to_profile = False
         if self._active_profile_name:
-            # Ask BEFORE anything is touched: "No" must leave the rows in the
-            # table AND the profile file completely unchanged.
+            # Ask before touching anything so the user knows what they are
+            # deciding. 'Yes' also stores the removal in the profile;
+            # 'No' removes the row for this session only and leaves the
+            # profile file exactly as it was.
             answer = QtWidgets.QMessageBox.question(
                 self, self.tr_.t("confirm"),
                 self.tr_.t("save_profile_changes", name=self._active_profile_name),
@@ -1021,22 +1052,25 @@ class MainWindow(QtWidgets.QMainWindow):
                 | QtWidgets.QMessageBox.StandardButton.No,
                 QtWidgets.QMessageBox.StandardButton.Yes,
             )
-            if answer != QtWidgets.QMessageBox.StandardButton.Yes:
-                return
-            removed_codes = set()
-            for index in rows_idx:
-                if 0 <= index < len(self.rows):
-                    removed_codes.add(str(self.rows[index].block.opc_code))
-                    del self.rows[index]
-            # Removal is a visibility choice for this profile only. Keep the
-            # workbook loaded so another profile can still use the station.
-            self._hidden_stations.update(removed_codes)
-            self._save_profile_data(self._active_profile_name)
+            if answer == QtWidgets.QMessageBox.StandardButton.Yes:
+                save_to_profile = True
+
+        removed_codes = set()
+        for index in rows_idx:
+            if 0 <= index < len(self.rows):
+                removed_codes.add(str(self.rows[index].block.opc_code))
+                del self.rows[index]
+
+        if self._active_profile_name:
+            if save_to_profile:
+                # Removal is a visibility choice for this profile only. Keep
+                # the workbook loaded so another profile can still use the
+                # station.
+                self._hidden_stations.update(removed_codes)
+                self._save_profile_data(self._active_profile_name)
+            # 'No': session-only removal — nothing is written to the profile.
         else:
             # Without a profile, retain the old session-only removal behavior.
-            for index in rows_idx:
-                if 0 <= index < len(self.rows):
-                    del self.rows[index]
             remaining_paths = {r.path for r in self.rows}
             for path in list(self.workbooks.keys()):
                 if path not in remaining_paths:
@@ -1183,9 +1217,6 @@ class MainWindow(QtWidgets.QMainWindow):
             file_item.setForeground(QtGui.QColor("#ff9a65" if not r.path else "#b9c7ff"))
             if not r.path:
                 file_item.setBackground(QtGui.QColor("#4a2928"))
-            else:
-                # Hand cursor: a single click on the file name opens it.
-                file_item.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             self.table.setItem(i, self.COL_FILE, file_item)
 
             cp_file_text = (Path(r.cp_path).name if r.cp_path
@@ -1196,8 +1227,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtGui.QColor("#ff9a65" if not r.cp_path else "#b9c7ff"))
             if not r.cp_path:
                 cp_file_item.setBackground(QtGui.QColor("#4a2928"))
-            else:
-                cp_file_item.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
             self.table.setItem(i, self.COL_FILE_CP, cp_file_item)
         self.table.blockSignals(False)
         self._suspend_checks = False
