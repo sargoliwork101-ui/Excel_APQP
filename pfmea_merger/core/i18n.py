@@ -179,6 +179,10 @@ STRINGS = {
         "fa": "پروفایل «{name}» پیدا نشد.",
         "en": "Profile '{name}' not found.",
     },
+    "profile_save_failed": {
+        "fa": "ذخیره پروفایل انجام نشد!\nممکن است فایل پروفایل در برنامه دیگری باز باشد یا پوشه پروفایل‌ها فقط‌خواندنی باشد. آن را ببندید و دوباره امتحان کنید.",
+        "en": "Saving the profile failed!\nThe profile file may be open in another program, or the profiles folder may be read-only. Close it and try again.",
+    },
     "overwrite_profile": {
         "fa": "پروفایلی به نام «{name}» از قبل وجود دارد. جایگزین شود؟",
         "en": "A profile named '{name}' already exists. Overwrite?",

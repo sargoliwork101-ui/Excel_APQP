@@ -187,6 +187,19 @@ def save_profile(profile: ProductProfile) -> Path:
         json.dumps(profile.to_dict(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # Two files can end up carrying the same display "name" (manual copies,
+    # older versions). The combo would then list the profile twice while
+    # load_profile() reads only one of them — the overwrite the user just
+    # confirmed would appear to "not apply". Keep exactly one file per name.
+    try:
+        for f in PROFILES_DIR.glob("*.json"):
+            if f.resolve() == p.resolve():
+                continue
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if data.get("name") == profile.name:
+                f.unlink()
+    except Exception:
+        pass
     return p
 
 

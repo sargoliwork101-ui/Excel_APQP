@@ -1296,7 +1296,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if restored:
             self.rows = restored
             self._attach_cp_stations()
-        if profile.stations and self.rows:
+        # Apply even when no input files are loaded yet: the profile's
+        # stations then appear as placeholders, so the user SEES what the
+        # profile contains instead of an empty table that looks like a
+        # no-op.
+        if profile.stations:
             self._apply_profile_to_rows(profile)
             self._rebuild_table()
         self._profile_snapshot = self._current_profile_signature()
@@ -1315,7 +1319,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for analysis in self.workbooks.values():
             product_name = product_name or analysis.product_name
             product_code = product_code or analysis.product_code
-        pm.save_profile(pm.ProductProfile(
+        profile = pm.ProductProfile(
             name=name, product_name=product_name, product_code=product_code,
             template_path=self.template_edit.text(),
             cp_template_path=self.cp_template_edit.text(),
@@ -1324,7 +1328,19 @@ class MainWindow(QtWidgets.QMainWindow):
             hidden_stations=sorted(self._hidden_stations),
             settings=self.merge_settings,
             cp_settings=self.cp_merge_settings,
-        ))
+        )
+        try:
+            pm.save_profile(profile)
+        except Exception:
+            # Never let a failed write pass silently: the user answered
+            # "Yes, save" and expects the profile on disk to be updated.
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            box.setWindowTitle(self.tr_.t("error"))
+            box.setText(self.tr_.t("profile_save_failed"))
+            box.setDetailedText(traceback.format_exc())
+            box.exec()
+            return
         self._profile_snapshot = self._current_profile_signature()
 
     def _on_load_profile(self):
@@ -1343,13 +1359,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.app_settings.save()
 
     def _on_save_profile(self):
-        default_name = ""
-        for a in self.workbooks.values():
-            if a.product_name:
-                default_name = a.product_name
-                break
+        try:
+            self._save_profile_dialog()
+        except Exception:
+            # A failed save must never be silent: the user confirmed the
+            # overwrite and expects the profile to be updated on disk.
+            box = QtWidgets.QMessageBox(self)
+            box.setIcon(QtWidgets.QMessageBox.Icon.Critical)
+            box.setWindowTitle(self.tr_.t("error"))
+            box.setText(self.tr_.t("profile_save_failed"))
+            box.setDetailedText(traceback.format_exc())
+            box.exec()
+
+    def _save_profile_dialog(self):
+        # Prefer the name of the ACTIVE profile: saving while a profile is
+        # selected should update THAT profile by default, not an unrelated
+        # name extracted from the workbook header.
+        default_name = self.profile_combo.currentText().strip()
         if not default_name:
-            default_name = self.profile_combo.currentText().strip()
+            for a in self.workbooks.values():
+                if a.product_name:
+                    default_name = a.product_name
+                    break
 
         name, ok = QtWidgets.QInputDialog.getText(
             self, self.tr_.t("profile_title"),
@@ -1399,6 +1430,16 @@ class MainWindow(QtWidgets.QMainWindow):
             cp_settings=self.cp_merge_settings,
         )
         pm.save_profile(profile)
+
+        # Verify the write actually reached the disk (locked file, antivirus,
+        # read-only folder... must surface as an error, not silent no-op).
+        verify = pm.load_profile(name)
+        if verify is None or verify.to_dict() != profile.to_dict():
+            QtWidgets.QMessageBox.critical(
+                self, self.tr_.t("error"),
+                self.tr_.t("profile_save_failed"))
+            return
+
         self._profile_snapshot = self._current_profile_signature()
         self._reload_profile_combo()
         self._profile_change_guard = True

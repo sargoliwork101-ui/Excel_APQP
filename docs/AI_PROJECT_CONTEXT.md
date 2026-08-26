@@ -120,7 +120,7 @@ python -m pfmea_merger.tools.e2e_test
 تست عملکردی مورد انتظار:
 
 ```text
-RESULT: 53 passed, 0 failed
+RESULT: 57 passed, 0 failed
 ```
 
 حداقل این موارد باید بررسی شوند:

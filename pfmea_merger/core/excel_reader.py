@@ -167,7 +167,9 @@ def _extract_product_info(ws) -> Tuple[str, str]:
                 continue
             if "نام قطعه" in val:
                 after = val.split(":", 1)[-1].strip()
-                if after:
+                # Empty form fields are filled with underscores ("____");
+                # they must not become a profile name / product name.
+                if after and not set(after) <= set("_- "):
                     product_name = after
             elif "شماره فنی" in val:
                 after = val.split(":", 1)[-1].strip()

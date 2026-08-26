@@ -362,6 +362,41 @@ def main() -> int:
         pm.delete_profile("__e2e_cp_legacy__")
 
     # -----------------------------------------------------------------
+    section("11. Profile overwrite correctness (save on existing name)")
+    import json as _json2
+    tname = "__e2e_overwrite__"
+    pm.delete_profile(tname)
+    pm.save_profile(pm.ProductProfile(
+        name=tname, stations=[pm.StationEntry("A999", "old", enabled=False)]))
+    first = pm.load_profile(tname)
+    # second save with the SAME name must fully replace the first content
+    pm.save_profile(pm.ProductProfile(
+        name=tname, stations=[pm.StationEntry("F10", "new-a", enabled=True),
+                              pm.StationEntry("A130", "new-b", enabled=False)]))
+    second = pm.load_profile(tname)
+    check([s.opc for s in second.stations] == ["F10", "A130"],
+          "Overwrite replaces station list")
+    check(all(s.opc != "A999" for s in second.stations),
+          "Overwrite removes old stations")
+
+    # shadow duplicate: another file carrying the same display name must not
+    # survive a save (it made the combo list the profile twice and load the
+    # stale copy, so the user's overwrite appeared to 'not apply')
+    shadow = pm.PROFILES_DIR / "__e2e_overwrite__copy.json"
+    shadow.write_text(_json2.dumps(
+        {"name": tname, "stations": [{"opc": "OLD", "enabled": False}]},
+        ensure_ascii=False), encoding="utf-8")
+    pm.save_profile(pm.ProductProfile(
+        name=tname, stations=[pm.StationEntry("F10", "new-a", enabled=True)]))
+    listed = pm.list_profiles()
+    check(listed.count(tname) == 1, "Shadow duplicate profile removed on save")
+    again = pm.load_profile(tname)
+    check(all(s.opc != "OLD" for s in again.stations),
+          "Loaded profile is the freshly saved one")
+    shadow.unlink(missing_ok=True)
+    pm.delete_profile(tname)
+
+    # -----------------------------------------------------------------
     print(f"\n{'='*60}")
     print(f"RESULT: {_pass} passed, {_fail} failed")
     return 0 if _fail == 0 else 1
