@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 import traceback
 from pathlib import Path
@@ -176,7 +177,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self):
-        self.setWindowTitle("PFMEA Merger")
+        self.setWindowTitle("PFMEA & CP Merger")
         self.resize(1180, 780)
         self.setMinimumSize(1000, 640)
 
@@ -320,6 +321,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.add_files_btn.setIcon(_ui_icon("add_file"))
         self.add_folder_btn = QtWidgets.QPushButton()
         self.add_folder_btn.setIcon(_ui_icon("add_folder"))
+        self.import_btn = QtWidgets.QPushButton()
+        self.import_btn.setIcon(_ui_icon("import"))
         self.refresh_btn = QtWidgets.QPushButton()
         self.refresh_btn.setIcon(_ui_icon("refresh"))
         self.remove_btn = QtWidgets.QPushButton()
@@ -329,11 +332,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.clear_btn.setProperty("danger", True)
         self.add_files_btn.clicked.connect(self._add_files)
         self.add_folder_btn.clicked.connect(self._add_folder)
+        self.import_btn.clicked.connect(self._import_files)
         self.refresh_btn.clicked.connect(self._refresh_all)
         self.remove_btn.clicked.connect(self._remove_selected)
         self.clear_btn.clicked.connect(self._clear_all)
         toolbar.addWidget(self.add_files_btn)
         toolbar.addWidget(self.add_folder_btn)
+        toolbar.addWidget(self.import_btn)
         toolbar.addWidget(self.refresh_btn)
         toolbar.addStretch(1)
         toolbar.addWidget(self.remove_btn)
@@ -526,9 +531,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.title_label.setText(t("app_title"))
         self.subtitle_label.setText(
-            "قالب PFMEA + فایل‌های ایستگاه ← یک خروجی تجمیعی"
+            "قالب‌های PFMEA و CP + فایل‌های ایستگاه ← خروجی‌های تجمیعی"
             if self.tr_.is_rtl()
-            else "PFMEA template + station files → one merged output"
+            else "PFMEA & CP templates + station files → merged outputs"
         )
         self.lang_btn.setToolTip(
             "English" if self.tr_.is_rtl() else "فارسی")
@@ -548,6 +553,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.profile_delete_btn.setText(t("delete_profile"))
         self.add_files_btn.setText(t("add_files"))
         self.add_folder_btn.setText(t("add_folder"))
+        self.import_btn.setText(t("import_files"))
+        self.import_btn.setToolTip(t("import_files_tip"))
         self.refresh_btn.setText(t("refresh"))
         self.remove_btn.setText(t("remove_selected"))
         self.clear_btn.setText(t("clear"))
@@ -757,6 +764,115 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 return
             self._add_paths(paths)
+
+    # ------------------------------------------------------- import (copy)
+    def _input_root(self) -> Optional[str]:
+        """The main input folder: the remembered folder, or its parent when
+        the remembered folder is itself the PFMEA/CP subfolder."""
+        d = self.app_settings.last_input_dir.strip()
+        if not d or not Path(d).is_dir():
+            return None
+        p = Path(d)
+        if p.name in ("PFMEA", "CP"):
+            return str(p.parent)
+        return str(p)
+
+    def _import_files(self):
+        """Copy station files into the proper input subfolder (PFMEA/CP).
+
+        The user no longer copies files around by hand: picked PFMEA files
+        land in <root>/PFMEA and CP files in <root>/CP. Existing files are
+        only replaced after an explicit confirmation.
+        """
+        start = self.app_settings.last_input_dir or str(Path.home())
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, self.tr_.t("import_files"), start,
+            f"{self.tr_.t('excel_files')} (*.xlsx *.xlsm)",
+        )
+        if not paths:
+            return
+
+        root = self._input_root()
+        if root is None:
+            root = QtWidgets.QFileDialog.getExistingDirectory(
+                self, self.tr_.t("import_pick_folder"), start,
+            )
+            if not root:
+                return
+        pfmea_dir = Path(root) / "PFMEA"
+        cp_dir = Path(root) / "CP"
+
+        dests: List[str] = []
+        invalid: List[str] = []
+        replace_all = False
+        counts = {"pfmea": 0, "cp": 0}
+
+        for src in paths:
+            src_path = Path(src)
+            # Classify by content: PFMEA sheet -> PFMEA folder, else CP.
+            analysis = analyze_workbook(src, self.merge_settings)
+            if analysis.is_valid:
+                dest_dir, kind = pfmea_dir, "pfmea"
+            else:
+                cp_analysis = analyze_workbook(src, self.cp_merge_settings)
+                if cp_analysis.is_valid:
+                    dest_dir, kind = cp_dir, "cp"
+                else:
+                    invalid.append(src_path.name)
+                    continue
+
+            dest = dest_dir / src_path.name
+            try:
+                already_in_place = src_path.resolve() == dest.resolve()
+            except OSError:
+                already_in_place = False
+            if already_in_place:
+                dests.append(str(dest))
+                counts[kind] += 1
+                continue
+
+            if dest.exists() and not replace_all:
+                box = QtWidgets.QMessageBox(self)
+                box.setIcon(QtWidgets.QMessageBox.Icon.Question)
+                box.setWindowTitle(self.tr_.t("confirm"))
+                box.setText(self.tr_.t("import_dup", name=src_path.name))
+                btn_yes = box.addButton(self.tr_.t("btn_yes"),
+                                        QtWidgets.QMessageBox.ButtonRole.YesRole)
+                btn_no = box.addButton(self.tr_.t("btn_no"),
+                                       QtWidgets.QMessageBox.ButtonRole.NoRole)
+                btn_all = box.addButton(self.tr_.t("btn_yes_all"),
+                                        QtWidgets.QMessageBox.ButtonRole.YesRole)
+                box.exec()
+                clicked = box.clickedButton()
+                if clicked is btn_no:
+                    continue
+                if clicked is btn_all:
+                    replace_all = True
+
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+            except Exception as exc:
+                QtWidgets.QMessageBox.critical(
+                    self, self.tr_.t("error"), f"{src_path.name}: {exc}")
+                continue
+            dests.append(str(dest))
+            counts[kind] += 1
+
+        if invalid:
+            QtWidgets.QMessageBox.warning(
+                self, self.tr_.t("warning"),
+                "\n".join(self.tr_.t("file_not_pfmea", name=n) for n in invalid),
+            )
+        if not dests:
+            return
+
+        self.app_settings.last_input_dir = str(root)
+        self.app_settings.save()
+        # Load the copied files (this also rebuilds the table).
+        self._add_paths(dests)
+        self.status.showMessage("● " + self.tr_.t(
+            "import_done", n=len(dests), p=counts["pfmea"], c=counts["cp"]))
 
     def _add_paths(self, paths: List[str]):
         """
@@ -1618,8 +1734,8 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(title)
         if self.tr_.is_rtl():
             html = (
-                "<div align=\"center\"><b>تجمیع‌گر PFMEA برای فرآیند APQP</b><br><br>"
-                "این برنامه برای مدیریت فایل‌های PFMEA ایستگاه‌ها، انتخاب ایستگاه‌ها و ساخت "
+                "<div align=\"center\"><b>تجمیع‌گر PFMEA و CP برای فرآیند APQP</b><br><br>"
+                "این برنامه برای مدیریت فایل‌های PFMEA و CP ایستگاه‌ها، انتخاب ایستگاه‌ها و ساخت "
                 "خروجی نهایی در قالب Template طراحی شده است.<br><br>"
                 "<b>طراحی و توسعه:</b> حامد سرگلی<br>"
                 "<b>تلفن:</b> 09126368924<br>"
@@ -1628,9 +1744,9 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         else:
             html = (
-                "<div align=\"center\"><b>PFMEA Merger for APQP</b><br><br>"
-                "A desktop tool for managing station PFMEA files and creating a final "
-                "Template-based workbook.<br><br>"
+                "<div align=\"center\"><b>PFMEA & CP Merger for APQP</b><br><br>"
+                "A desktop tool for managing station PFMEA and Control Plan files and creating "
+                "the final Template-based workbooks.<br><br>"
                 "<b>Developed by:</b> Hamed Sargoli<br>"
                 "<b>Phone:</b> 09126368924<br>"
                 "<b>Email:</b> <a href=\"mailto:hamed.sargoli@gmail.com\">hamed.sargoli@gmail.com</a><br><br>"

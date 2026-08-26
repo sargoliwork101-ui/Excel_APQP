@@ -4,7 +4,7 @@ Very small bilingual (FA/EN) translations dictionary.
 
 STRINGS = {
     # ---- window / titles
-    "app_title": {"fa": "تجمیع‌ گر PFMEA - فرآیند APQP", "en": "PFMEA Merger - APQP Process"},
+    "app_title": {"fa": "تجمیع‌گر PFMEA و CP - فرآیند APQP", "en": "PFMEA & CP Merger - APQP Process"},
     "settings_title": {"fa": "تنظیمات", "en": "Settings"},
     "profile_title": {"fa": "پروفایل محصول", "en": "Product Profile"},
 
@@ -29,6 +29,26 @@ STRINGS = {
     "restore_settings": {"fa": "بازیابی تنظیمات", "en": "Restore settings"},
     "add_files": {"fa": "افزودن فایل‌ها", "en": "Add Files"},
     "add_folder": {"fa": "افزودن پوشه", "en": "Add Folder"},
+    "import_files": {"fa": "وارد کردن فایل‌ها", "en": "Import Files"},
+    "import_files_tip": {
+        "fa": "انتخاب فایل‌های ایستگاه؛ برنامه آن‌ها را در زیرپوشه PFMEA یا CP پوشه ورودی کپی و بارگذاری می‌کند.",
+        "en": "Pick station files; the app copies them into the PFMEA or CP subfolder of the input folder and loads them.",
+    },
+    "import_pick_folder": {
+        "fa": "پوشه اصلی ورودی‌ها را انتخاب کنید:\n(فایل‌های PFMEA در زیرپوشه «PFMEA» و فایل‌های CP در زیرپوشه «CP» کپی می‌شوند)",
+        "en": "Select the main input folder:\n(PFMEA files go to the 'PFMEA' subfolder, CP files to the 'CP' subfolder)",
+    },
+    "import_dup": {
+        "fa": "فایل «{name}» از قبل در پوشه مقصد وجود دارد.\nجایگزین فایل قبلی شود؟",
+        "en": "File '{name}' already exists in the destination folder.\nReplace the existing file?",
+    },
+    "import_done": {
+        "fa": "{n} فایل به پوشه‌ها کپی و بارگذاری شد (PFMEA: {p}، CP: {c}).",
+        "en": "{n} files copied into the folders and loaded (PFMEA: {p}, CP: {c}).",
+    },
+    "btn_yes": {"fa": "بله", "en": "Yes"},
+    "btn_no": {"fa": "نه", "en": "No"},
+    "btn_yes_all": {"fa": "بله، برای همه", "en": "Yes to all"},
     "clear": {"fa": "پاک کردن", "en": "Clear"},
     "refresh": {"fa": "به‌روزرسانی", "en": "Refresh"},
 

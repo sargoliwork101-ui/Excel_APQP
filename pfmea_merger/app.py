@@ -32,7 +32,7 @@ from pfmea_merger.ui.style import apply_dark_theme
 def main() -> int:
     # High-DPI is on by default in Qt6.
     app = QtWidgets.QApplication(sys.argv)
-    app.setApplicationName("PFMEA Merger")
+    app.setApplicationName("PFMEA & CP Merger")
     app.setOrganizationName("APQP Tools")
 
     # Pick a font that renders Persian well
